@@ -124,3 +124,9 @@ npm run test:omniforge
 
 - 정책 라우터 테스트: `tests/omniforge/sensitivity-router.test.mjs`
 - 익명화 파이프라인 테스트: `tests/omniforge/anonymize.test.mjs`
+
+## Obsidian Plugin (BRAT Lite)
+
+- Plugin ID: `class-homepage-brat-lite`
+- Main command: `학급 홈페이지 열기`
+- Install quick guide: `BRAT_INSTALL.md`
