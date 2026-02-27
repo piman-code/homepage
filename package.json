@@ -1,0 +1,22 @@
+{
+  "name": "class-homepage",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Obsidian-based class homepage scaffold (Quartz 4-ready)",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/offline-build.mjs --watch",
+    "build": "node scripts/offline-build.mjs",
+    "validate:frontmatter": "node scripts/validate-frontmatter.mjs",
+    "preflight:sharenote": "node scripts/sharenote-preflight.mjs",
+    "test": "npm run test:guardrails && npm run test:rag && npm run test:omniforge",
+    "test:guardrails": "node --test tests/guardrails/*.test.mjs",
+    "test:rag": "node --test tests/rag/*.test.mjs",
+    "test:omniforge": "node --test tests/omniforge/*.test.mjs",
+    "check": "npm run validate:frontmatter && npm run preflight:sharenote && npm run build",
+    "build:quartz": "echo 'Quartz runtime is not bundled in this offline scaffold. Sync official Quartz 4 source, then run: npx quartz build' && exit 1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
