@@ -206,6 +206,7 @@ results.push(
     assert.ok(manifest.version in versions);
     assert.equal(versions[manifest.version], manifest.minAppVersion);
     assert.match(mainText, /ClassHomepageBratLite/);
+    assert.doesNotMatch(mainText, /require\(\s*['"]\.\.?\//);
   })
 );
 

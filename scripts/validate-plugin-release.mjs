@@ -20,9 +20,11 @@ async function readUtf8NoBom(fileName) {
 }
 
 async function run() {
+  const requiredContent = {};
   for (const file of requiredFiles) {
     const text = await readUtf8NoBom(file);
     assert(text.trim().length > 0, `${file} is empty`);
+    requiredContent[file] = text;
   }
 
   for (const file of optionalFiles) {
@@ -37,6 +39,7 @@ async function run() {
 
   const manifest = JSON.parse(await readUtf8NoBom('manifest.json'));
   const versions = JSON.parse(await readUtf8NoBom('versions.json'));
+  const mainJs = requiredContent['main.js'];
 
   assert(manifest.id === 'class-homepage-brat-lite', 'manifest.json id must be class-homepage-brat-lite');
   assert(typeof manifest.version === 'string' && manifest.version.length > 0, 'manifest.json version is missing');
@@ -46,6 +49,7 @@ async function run() {
     versions[manifest.version] === manifest.minAppVersion,
     `versions.json minAppVersion mismatch for ${manifest.version}: expected ${manifest.minAppVersion}, got ${versions[manifest.version]}`
   );
+  assert(!/require\(\s*['"]\.\.?\//.test(mainJs), 'main.js must be self-contained for BRAT (no local file require)');
 
   console.log('[validate-plugin-release] ok');
 }
