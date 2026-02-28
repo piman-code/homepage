@@ -1,4 +1,4 @@
-﻿'use strict';
+'use strict';
 
 const { Plugin, PluginSettingTab, Setting, Notice, normalizePath } = require('obsidian');
 

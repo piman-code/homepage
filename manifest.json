@@ -1,7 +1,7 @@
-﻿{
+{
     "id":  "class-homepage-brat-lite",
     "name":  "Class Homepage BRAT Lite",
-    "version":  "0.1.3",
+    "version":  "0.1.4",
     "minAppVersion":  "1.5.0",
     "description":  "Open the class homepage note quickly (plugin-first starter for BRAT).",
     "author":  "piman-code",
