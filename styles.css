@@ -1,0 +1,18 @@
+.callout[data-callout="teacher"] {
+  --callout-color: 38, 84, 124;
+  --callout-icon: lucide-clipboard-check;
+  border-left: 4px solid rgb(38, 84, 124);
+  background-color: rgba(38, 84, 124, 0.08);
+}
+
+.callout[data-callout="teacher"] .callout-title {
+  font-weight: 700;
+}
+
+.markdown-preview-view table:has(th):has(td) {
+  border: 1px solid var(--background-modifier-border);
+}
+
+.markdown-preview-view table th {
+  background-color: rgba(38, 84, 124, 0.1);
+}

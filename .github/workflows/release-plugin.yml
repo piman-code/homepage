@@ -1,0 +1,42 @@
+name: Release Obsidian Plugin
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate BRAT release files
+        run: npm run validate:plugin-release
+
+      - name: Run plugin acceptance tests
+        run: npm run test:plugin
+
+      - name: Create GitHub release with BRAT assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            manifest.json
+            main.js
+            versions.json
+            styles.css

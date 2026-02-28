@@ -1,11 +1,8 @@
-# BRAT 설치 안내 (초보자용)
+# BRAT 설치 안내
 
-## 3단계 설치
-1. Obsidian → Community Plugins에서 **BRAT** 설치/활성화
-2. BRAT의 `Add beta plugin`에서 `piman-code/homepage` 입력
-3. 플러그인 목록에서 **Class Homepage BRAT Lite** 활성화
+1. Obsidian `Community plugins`에서 **BRAT**를 설치하고 활성화합니다.
+2. BRAT 메뉴에서 `Add Beta plugin`을 선택합니다.
+3. 저장소 주소 `https://github.com/piman-code/homepage`를 입력합니다.
+4. 플러그인 목록에서 **Class Homepage BRAT Lite**를 활성화합니다.
 
-## 실패 복구 1단계
-- 설치/업데이트가 꼬이면: BRAT에서 해당 플러그인을 제거 후, 2단계부터 다시 진행
-
-설치 후 명령 팔레트에서 `학급 홈페이지 열기`를 실행하세요.
+설치 후 커맨드 팔레트에서 `학급 홈페이지 열기`를 실행하면 기본 구조가 자동 생성됩니다.
