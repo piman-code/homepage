@@ -1,7 +1,7 @@
 {
     "id":  "class-homepage-brat-lite",
     "name":  "Class Homepage BRAT Lite",
-    "version":  "0.2.2",
+    "version":  "0.2.3",
     "minAppVersion":  "1.5.0",
     "description":  "Classroom workflow plugin for homepage, notices, and news-reading assignments.",
     "author":  "piman-code",
