@@ -64,3 +64,12 @@ npm run test:plugin
 ```
 
 릴리스 절차는 [RELEASE.md](RELEASE.md), 오류 대응은 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)를 참고하세요.
+
+## v2 SPEC / 템플릿 업데이트 (2026-03-01)
+
+- 공식 v2 스펙: [docs/SPEC-homepage-plugin-v2.md](docs/SPEC-homepage-plugin-v2.md)
+- 홈페이지 기본 템플릿 개선:
+  - `오늘 운영 루틴 (수업 전/중/후)` 섹션 추가
+  - `학부모 소통 보드` 표 추가
+  - `학부모 전달용 문구(복사)` 섹션 추가
+- 기존 커맨드 6종의 ID/라벨은 하위 호환 유지

@@ -56,3 +56,12 @@ git push origin v0.2.0
 
 - `plugin-ci.yml`: `validate:plugin-release`, `test:plugin` 실패 원인 확인
 - `release-plugin.yml`: 릴리스 파일 업로드 단계 실패 로그 확인
+
+## v2 반영 체크 (2026-03-01)
+
+- 스펙 기준 문서: [docs/SPEC-homepage-plugin-v2.md](docs/SPEC-homepage-plugin-v2.md)
+- 홈페이지 템플릿에 아래 섹션 포함 여부 확인
+  - `오늘 운영 루틴 (수업 전/중/후)`
+  - `학부모 소통 보드`
+  - `학부모 전달용 문구(복사)`
+- 하위 호환 확인: 기존 6개 명령 ID/라벨/실행 경로 변경 없음

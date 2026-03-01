@@ -151,7 +151,14 @@ results.push(
     assert.equal(vault.getAbstractFileByPath('홈/홈페이지.md'), null);
     await commandByName(core, '학급 홈페이지 열기').run();
 
-    assert.ok(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    const homepageFile = vault.getAbstractFileByPath('홈/홈페이지.md');
+    assert.ok(homepageFile);
+    const homepageContent = await vault.read(homepageFile);
+
+    assert.match(homepageContent, /## 🧭 오늘 운영 루틴 \(수업 전\/중\/후\)/);
+    assert.match(homepageContent, /## 📣 학부모 소통 보드/);
+    assert.match(homepageContent, /\[\[1\. 공지사항\/2026-02-28-공지\]\]/);
+    assert.match(homepageContent, /## 🧾 학부모 전달용 문구\(복사\)/);
     assert.deepEqual(workspace.openedPaths, ['홈/홈페이지.md']);
   })
 );
