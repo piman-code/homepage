@@ -32,6 +32,7 @@ const COMMAND_SPECS = Object.freeze([
   { id: 'regenerate-class-structure', name: '학급 기본 구조 재생성(백업 후 덮어쓰기)', method: 'regenerateStructureWithBackup' },
   { id: 'create-today-notice-note', name: '오늘자 공지 노트 생성', method: 'createTodayNoticeNote' },
   { id: 'create-today-news-assignment', name: '오늘자 뉴스읽기 과제 생성', method: 'createTodayNewsAssignment' },
+  { id: 'apply-miricanvas-homepage-template', name: '미리캔버스 스타일 홈페이지 적용', method: 'applyMiricanvasHomepageTemplate' },
 ]);
 
 function normalizeSlashes(value) {
@@ -149,6 +150,65 @@ function buildHomepageTemplate(dateText) {
     '- [ ] 주간학습안내 업데이트',
     '- [ ] 뉴스읽기/설문 링크 점검',
     '- [ ] 결석·지각 학생 안내 처리',
+    '',
+  ].join('\n');
+}
+
+function buildMiricanvasHomepageTemplate(dateText) {
+  return [
+    '---',
+    'category: 홈',
+    'priority: HIGH',
+    'tags: [홈페이지, 학급운영, 학부모, 공지]',
+    'share_link:',
+    `share_updated: ${dateText}`,
+    'target: 학부모/학생',
+    'theme: miricanvas-like',
+    '---',
+    '',
+    '# 학부모님께 드리는 말씀',
+    '',
+    '## Properties',
+    '- share_link: ',
+    `- share_updated: ${dateText}`,
+    '- priority: HIGH',
+    '- tags: 공지, 학부모, 안내',
+    '- category: 1. 공지사항',
+    '',
+    '> [!note] 배너 영역',
+    '> - 미리캔버스에서 만든 배너를 첨부하세요',
+    '> - 예시: ![[999-Attachments/학부모공지-배너.png]]',
+    '',
+    '## 인사말',
+    '- 안녕하세요. 이번 주 학급 운영 핵심 안내를 드립니다.',
+    '',
+    '## 교육 목표',
+    '1. 기본 학습 습관 형성',
+    '2. 협력적 문제 해결',
+    '3. 자기주도 학습 강화',
+    '',
+    '## 이번 주 공지',
+    '- [ ] 핵심 공지 1',
+    '- [ ] 핵심 공지 2',
+    '',
+    '## 준비물/일정',
+    '| 항목 | 내용 | 확인 |',
+    '| --- | --- | --- |',
+    '| 준비물 |  | [ ] |',
+    '| 주요 일정 |  | [ ] |',
+    '| 제출 과제 |  | [ ] |',
+    '',
+    '## 빠른 이동',
+    '- [[1. 공지사항]]',
+    '- [[2. 주간학습안내]]',
+    '- [[3. 뉴스읽기]]',
+    '- [[4. 수업활동]]',
+    '- [[5. 설문]]',
+    '',
+    '## 학부모 확인 요청',
+    '- [ ] 공지 확인 완료',
+    '- [ ] 준비물 확인 완료',
+    '- [ ] 문의사항 전달',
     '',
   ].join('\n');
 }
@@ -358,6 +418,18 @@ class ClassHomepageCore {
     const result = await this.createOrUpdateNote(this.getTodayNewsPath(dateText), buildNewsTemplate({ dateText, formLink: this.settings.formLink }), { overwrite: false, backup: false });
     await this.openFileByPath(result.path);
     return { notice: result.created ? `오늘자 뉴스읽기 과제를 생성했습니다: ${result.path}` : `오늘자 뉴스읽기 과제가 이미 있습니다: ${result.path}` };
+  }
+
+  async applyMiricanvasHomepageTemplate() {
+    await this.ensureRequiredFolders();
+    const dateText = this.getToday();
+    const result = await this.createOrUpdateNote(
+      this.getHomepagePath(),
+      buildMiricanvasHomepageTemplate(dateText),
+      { overwrite: true, backup: true, backupStamp: formatTimestamp(this.now()) }
+    );
+    await this.openFileByPath(result.path);
+    return { notice: `미리캔버스 스타일 홈페이지를 적용했습니다: ${result.path}` };
   }
 
   async regenerateStructureWithBackup() {
