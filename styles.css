@@ -16,3 +16,23 @@
 .markdown-preview-view table th {
   background-color: rgba(38, 84, 124, 0.1);
 }
+
+/* Miricanvas-like homepage visual hierarchy */
+.markdown-preview-view h1:has(+ h2) {
+  letter-spacing: -0.02em;
+}
+
+.markdown-preview-view h2 {
+  border-left: 4px solid rgba(80, 120, 180, 0.8);
+  padding-left: 0.5rem;
+}
+
+.markdown-preview-view blockquote {
+  border-left-color: rgba(80, 120, 180, 0.7);
+  background: rgba(80, 120, 180, 0.08);
+}
+
+.markdown-preview-view ul:has(input[type="checkbox"]) li {
+  margin: 0.2rem 0;
+}
+
