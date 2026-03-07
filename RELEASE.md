@@ -55,6 +55,9 @@ git push origin v<next-version>
 
 ## 사이트 배포 절차 (main 브랜치)
 
+- 1회 선행 조건:
+  - GitHub 저장소 `Settings > Pages > Build and deployment`에서 `Source`를 `GitHub Actions`로 설정
+  - 또는 `PAGES_TOKEN` secret을 추가해 workflow가 Pages enablement를 자동 시도하도록 구성
 - `main` 브랜치 push 시 `Deploy Class Homepage` 워크플로가 실행됨
 - 실행 검증:
   - `npm run validate:frontmatter`
@@ -78,6 +81,7 @@ git push origin v<next-version>
 - `plugin-ci.yml`: `validate:plugin-release`, `test:plugin` 실패 원인 확인
 - `release-plugin.yml`: 태그 릴리스/Assets 업로드 단계 실패 로그 확인
 - `deploy.yml`: `validate:frontmatter`, `build` 실패 로그 확인
+- `deploy.yml`에서 `Setup Pages` 단계가 실패하면 저장소 Pages 설정 또는 `PAGES_TOKEN` 구성을 먼저 확인
 - 전체 검증 실패 확인이 필요하면 로컬에서 `npm run test`, `npm run check`를 추가 실행
 
 ## v2 반영 체크 (2026-03-01)

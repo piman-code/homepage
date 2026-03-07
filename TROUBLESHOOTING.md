@@ -99,3 +99,17 @@
 1. 최신 `scripts/lib/frontmatter.mjs`가 적용되어 있는지 확인
 2. `npm run validate:frontmatter`를 다시 실행
 3. 여전히 실패하면 실제 frontmatter 블록 시작/종료 구분선(`---`)이 깨졌는지 확인
+
+## GitHub Pages 배포가 `Setup Pages`에서 실패할 때
+
+증상:
+- `Deploy Class Homepage` 워크플로에서 `Validate frontmatter`, `Build site`는 성공하지만 `Setup Pages`가 실패함
+
+원인:
+- 저장소의 GitHub Pages가 아직 활성화되지 않았거나
+- 자동 enable용 `PAGES_TOKEN` secret이 없음
+
+해결:
+1. GitHub 저장소에서 `Settings > Pages > Build and deployment > Source`를 `GitHub Actions`로 설정
+2. 또는 `PAGES_TOKEN` secret을 추가해 workflow가 `actions/configure-pages`의 `enablement: true` 경로를 사용할 수 있게 구성
+3. 설정 후 `Deploy Class Homepage` workflow를 재실행하거나 `main`에 새 커밋을 푸시
