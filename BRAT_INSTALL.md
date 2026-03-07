@@ -10,7 +10,7 @@
 1. Obsidian `Settings > Community plugins`에서 **BRAT**를 설치하고 활성화합니다.
 2. BRAT 설정에서 `Add Beta plugin`을 선택합니다.
 3. 저장소 주소 `https://github.com/piman-code/homepage`를 입력합니다.
-4. 플러그인 목록에서 **Homepage** 또는 `class-homepage-brat-lite`를 활성화합니다.
+4. 플러그인 목록에서 **homepage** 또는 `class-homepage-brat-lite`를 활성화합니다.
 
 ## 설치 직후 확인
 
