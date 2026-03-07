@@ -18,17 +18,19 @@ export async function walkMarkdownFiles(dir) {
 }
 
 export function parseFrontmatter(raw) {
-  if (!raw.startsWith("---\n")) {
-    return { frontmatter: null, body: raw, errors: ["missing frontmatter start delimiter"] }
+  const normalizedRaw = String(raw ?? "").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n")
+
+  if (!normalizedRaw.startsWith("---\n")) {
+    return { frontmatter: null, body: normalizedRaw, errors: ["missing frontmatter start delimiter"] }
   }
 
-  const end = raw.indexOf("\n---\n", 4)
+  const end = normalizedRaw.indexOf("\n---\n", 4)
   if (end === -1) {
-    return { frontmatter: null, body: raw, errors: ["missing frontmatter end delimiter"] }
+    return { frontmatter: null, body: normalizedRaw, errors: ["missing frontmatter end delimiter"] }
   }
 
-  const block = raw.slice(4, end)
-  const body = raw.slice(end + 5)
+  const block = normalizedRaw.slice(4, end)
+  const body = normalizedRaw.slice(end + 5)
   const frontmatter = {}
   const errors = []
 

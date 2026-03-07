@@ -49,6 +49,16 @@ test("extractSensitivityTags detects sensitivity signals from fields and text", 
   assert.deepEqual(tags, ["counseling", "conflict"])
 })
 
+test("extractSensitivityTags maps guardian_note field to family sensitivity", () => {
+  const tags = extractSensitivityTags({
+    fields: {
+      guardian_note: "보호자와 통화 필요",
+    },
+  })
+
+  assert.deepEqual(tags, ["family"])
+})
+
 test("routeBySensitivity allows external route with non-sensitive payload", () => {
   const result = routeBySensitivity({
     tags: ["study"],

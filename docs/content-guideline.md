@@ -8,38 +8,52 @@
 
 ## 2. frontmatter 규칙
 
-기본 필수 필드:
+기본 필수 필드(모든 문서):
 
 - `title`
-- `date`
-- `category`
-- `tags`
-- `published`
-- `pin`
+- `date` (`YYYY-MM-DD`)
+- `category` (`home|notice|lesson|assignment|schedule|newsletter|faq|resource|ai-assistant`)
+- `tags` (YAML 배열)
+- `published` (`true|false`)
+- `pin` (`true|false`)
 
-과제(`assignment`) 문서는 `due`를 추가로 필수 입력합니다.
+추가 필수 필드:
 
-권장 필드(상황별):
+- `assignment` 카테고리는 `due` (`YYYY-MM-DD`) 필수
 
-- `visibility` (`public|internal`)
+권장 필드(스키마 기본값):
+
+- `visibility` (`public|internal`, 기본 `public`)
+- `rag_enabled` (`true|false`, 기본 `true`)
+- `safety_level` (`school-default|restricted`, 기본 `school-default`)
+
+상황별 선택 필드:
+
 - `grade`
 - `subject`
 - `unit`
-- `rag_enabled`
-- `safety_level`
 
-예시:
+표준 예시:
 
 ```yaml
 title: "문서 제목"
 date: 2026-02-26
-category: notice # home|notice|lesson|assignment|schedule|newsletter|faq|resource|ai-assistant
+category: notice
 tags: [공지, 수행평가]
 published: true
 pin: false
-visibility: public # 권장
-subject: "과학" # 선택
-due: 2026-03-05 # assignment에서 필수
+visibility: public
+rag_enabled: true
+safety_level: school-default
+subject: "과학"
+unit: "1단원"
+```
+
+과제 문서 예시(추가 필수):
+
+```yaml
+category: assignment
+due: 2026-03-05
 ```
 
 ## 3. 폴더별 category 매핑

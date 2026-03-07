@@ -164,9 +164,12 @@ results.push(
 );
 
 results.push(
-  await runTest('news template includes frontmatter and configured form link', async () => {
-    const formLink = 'https://forms.gle/demo-link';
-    const { core, vault } = createCore({ formLink });
+  await runTest('news template uses segmented google form setting first', async () => {
+    const segmentedLink = 'https://forms.gle/segmented-link';
+    const { core, vault } = createCore({
+      formLink: 'https://forms.gle/legacy-link',
+      googleForm: { ...DEFAULT_SETTINGS.googleForm, newsSubmissionUrl: segmentedLink },
+    });
 
     await commandByName(core, '뉴스읽기 템플릿 생성').run();
     const file = vault.getAbstractFileByPath('docs/뉴스읽기-템플릿.md');
@@ -177,7 +180,24 @@ results.push(
     assert.match(content, /tags: \[뉴스읽기, 시사, 토론\]/);
     assert.match(content, /source_url:/);
     assert.match(content, /difficulty: medium/);
-    assert.match(content, new RegExp(formLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.match(content, new RegExp(segmentedLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    assert.doesNotMatch(content, /legacy-link/);
+  })
+);
+
+results.push(
+  await runTest('news template falls back to legacy formLink when segmented link is empty', async () => {
+    const legacyLink = 'https://forms.gle/fallback-legacy';
+    const { core, vault } = createCore({
+      formLink: legacyLink,
+      googleForm: { ...DEFAULT_SETTINGS.googleForm, newsSubmissionUrl: '' },
+    });
+
+    await commandByName(core, '뉴스읽기 템플릿 생성').run();
+    const file = vault.getAbstractFileByPath('docs/뉴스읽기-템플릿.md');
+    const content = await vault.read(file);
+
+    assert.match(content, new RegExp(legacyLink.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   })
 );
 
@@ -189,6 +209,59 @@ results.push(
     const { core, vault } = createCore({ homepagePath: '홈\\내반\\..\\홈페이지' });
     await commandByName(core, '학급 홈페이지 열기').run();
     assert.ok(vault.getAbstractFileByPath('홈/홈페이지.md'));
+  })
+);
+
+results.push(
+  await runTest('apply google form links updates homepage/notice/survey notes', async () => {
+    const { core, vault } = createCore({
+      googleForm: {
+        ...DEFAULT_SETTINGS.googleForm,
+        newsSubmissionUrl: 'https://forms.gle/news-submit',
+        parentSurveyUrl: 'https://forms.gle/parent',
+      },
+    });
+
+    await commandByName(core, '폼 링크 자동 적용').run();
+
+    const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    const notice = await vault.read(vault.getAbstractFileByPath('1. 공지사항/2026-02-28-공지.md'));
+    const survey = await vault.read(vault.getAbstractFileByPath('5. 설문/2026-02-28-설문 링크.md'));
+
+    for (const content of [homepage, notice, survey]) {
+      assert.match(content, /## 🔗 Google Form 링크/);
+      assert.match(content, /https:\/\/forms\.gle\/news-submit/);
+      assert.match(content, /https:\/\/forms\.gle\/parent/);
+    }
+
+    await commandByName(core, '폼 링크 자동 적용').run();
+    const rerunHomepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    const headingCount = (rerunHomepage.match(/## 🔗 Google Form 링크/g) || []).length;
+    assert.equal(headingCount, 1);
+  })
+);
+
+results.push(
+  await runTest('generate weekly auto report creates weekly note with core links', async () => {
+    const { core, vault } = createCore({
+      googleForm: {
+        ...DEFAULT_SETTINGS.googleForm,
+        newsSubmissionUrl: 'https://forms.gle/news-submit',
+        weeklyCheckinUrl: 'https://forms.gle/weekly-checkin',
+      },
+    });
+
+    await commandByName(core, '주간 자동 보고서 생성').run();
+
+    const reportFile = vault.getAbstractFileByPath('2. 주간학습안내/2026-02-23~2026-03-01-주간 자동 보고.md');
+    assert.ok(reportFile);
+
+    const reportContent = await vault.read(reportFile);
+    assert.match(reportContent, /# 2026-02-23~2026-03-01 주간 자동 보고/);
+    assert.match(reportContent, /\[\[홈\/홈페이지\]\]/);
+    assert.match(reportContent, /\[\[1\. 공지사항\/2026-02-28-공지\]\]/);
+    assert.match(reportContent, /\[\[3\. 뉴스읽기\/2026-02-28-뉴스읽기 과제\]\]/);
+    assert.match(reportContent, /https:\/\/forms\.gle\/weekly-checkin/);
   })
 );
 

@@ -18,6 +18,7 @@ const FIELD_TAG_MAP = new Map([
   ["familyNotes", "family"],
   ["family_note", "family"],
   ["guardianNotes", "family"],
+  ["guardian_note", "family"],
   ["counselingNotes", "counseling"],
   ["counseling_note", "counseling"],
   ["conflictNotes", "conflict"],

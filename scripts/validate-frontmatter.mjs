@@ -1,26 +1,18 @@
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { readMarkdown, walkMarkdownFiles } from "./lib/frontmatter.mjs"
+import {
+  allowedCategories,
+  allowedSafetyLevels,
+  allowedVisibility,
+  pathCategoryRules,
+  requiredFields,
+} from "./lib/frontmatter-schema.mjs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const rootDir = path.resolve(__dirname, "..")
 const contentDir = path.join(rootDir, "content")
-
-const requiredFields = ["title", "date", "category", "tags", "published", "pin"]
-const allowedCategories = new Set(["home", "notice", "lesson", "assignment", "schedule", "newsletter", "faq", "resource", "ai-assistant"])
-const allowedVisibility = new Set(["public", "internal"])
-const allowedSafetyLevels = new Set(["school-default", "restricted"])
-const pathCategoryRules = [
-  { prefix: "notices/", category: "notice" },
-  { prefix: "lessons/", category: "lesson" },
-  { prefix: "assignments/", category: "assignment" },
-  { prefix: "schedule/", category: "schedule" },
-  { prefix: "newsletters/", category: "newsletter" },
-  { prefix: "faq/", category: "faq" },
-  { prefix: "resources/", category: "resource" },
-  { prefix: "ai-assistant/", category: "ai-assistant" },
-]
 
 const files = await walkMarkdownFiles(contentDir)
 const errors = []

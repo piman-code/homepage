@@ -4,6 +4,13 @@ const DEFAULT_SETTINGS = Object.freeze({
   homepagePath: '홈/홈페이지.md',
   newsFolder: '3. 뉴스읽기',
   formLink: '',
+  googleForm: {
+    newsSubmissionUrl: '',
+    parentSurveyUrl: '',
+    weeklyCheckinUrl: '',
+    prefillTemplate: '',
+    responseSheetUrl: '',
+  },
 });
 
 const REQUIRED_FOLDERS = Object.freeze([
@@ -23,6 +30,16 @@ const DEFAULT_PATHS = Object.freeze({
   noticeFolder: '1. 공지사항',
 });
 
+function normalizeGoogleFormSettings(value = {}) {
+  return {
+    newsSubmissionUrl: String(value.newsSubmissionUrl || '').trim(),
+    parentSurveyUrl: String(value.parentSurveyUrl || '').trim(),
+    weeklyCheckinUrl: String(value.weeklyCheckinUrl || '').trim(),
+    prefillTemplate: String(value.prefillTemplate || '').trim(),
+    responseSheetUrl: String(value.responseSheetUrl || '').trim(),
+  };
+}
+
 const COMMAND_SPECS = Object.freeze([
   { id: 'open-class-homepage', name: '학급 홈페이지 열기', method: 'openHomepage' },
   { id: 'append-today-notice-section', name: '오늘 공지 섹션 추가', method: 'appendTodayNoticeSection' },
@@ -30,6 +47,8 @@ const COMMAND_SPECS = Object.freeze([
   { id: 'regenerate-class-structure', name: '학급 기본 구조 재생성(백업 후 덮어쓰기)', method: 'regenerateStructureWithBackup' },
   { id: 'create-today-notice-note', name: '오늘자 공지 노트 생성', method: 'createTodayNoticeNote' },
   { id: 'create-today-news-assignment', name: '오늘자 뉴스읽기 과제 생성', method: 'createTodayNewsAssignment' },
+  { id: 'apply-google-form-links', name: '폼 링크 자동 적용', method: 'applyGoogleFormLinks' },
+  { id: 'generate-weekly-auto-report', name: '주간 자동 보고서 생성', method: 'generateWeeklyAutoReport' },
   { id: 'apply-miricanvas-homepage-template', name: '미리캔버스 스타일 홈페이지 적용', method: 'applyMiricanvasHomepageTemplate' },
 ]);
 
@@ -73,6 +92,23 @@ function formatDate(date) {
 
 function formatTimestamp(date) {
   return `${date.getFullYear()}${pad2(date.getMonth() + 1)}${pad2(date.getDate())}-${pad2(date.getHours())}${pad2(date.getMinutes())}${pad2(date.getSeconds())}`;
+}
+
+function getWeekRange(date) {
+  const base = new Date(date);
+  const day = base.getDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+
+  const start = new Date(base);
+  start.setDate(base.getDate() + mondayOffset);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  return {
+    start: formatDate(start),
+    end: formatDate(end),
+  };
 }
 
 function buildHomepageTemplate(dateText) {
@@ -312,12 +348,164 @@ class ClassHomepageCore {
     return this.normalizePath(normalizeNotePath(DEFAULT_PATHS.newsTemplate, DEFAULT_PATHS.newsTemplate));
   }
 
+  getNewsSubmissionUrl() {
+    const googleFormLink = this.settings.googleForm && this.settings.googleForm.newsSubmissionUrl;
+    return String(googleFormLink || this.settings.formLink || '').trim();
+  }
+
   getTodayNoticePath(dateText) {
     return this.normalizePath(normalizeNotePath(`${DEFAULT_PATHS.noticeFolder}/${dateText}-공지.md`));
   }
 
   getTodayNewsPath(dateText) {
     return this.normalizePath(normalizeNotePath(`${this.getNewsFolderPath()}/${dateText}-뉴스읽기 과제.md`));
+  }
+
+  getGoogleFormLinkLines() {
+    const links = [];
+    const googleForm = this.settings.googleForm || {};
+    const add = (label, value) => {
+      const normalized = String(value || '').trim();
+      if (normalized) links.push(`- ${label}: ${normalized}`);
+    };
+
+    add('뉴스 제출', this.getNewsSubmissionUrl());
+    add('학부모 설문', googleForm.parentSurveyUrl);
+    add('주간 체크인', googleForm.weeklyCheckinUrl);
+    add('사전입력 템플릿', googleForm.prefillTemplate);
+    add('응답 시트', googleForm.responseSheetUrl);
+
+    if (links.length === 0) {
+      return ['- 링크가 비어 있습니다. 설정에서 Google Form URL을 입력하세요.'];
+    }
+
+    return links;
+  }
+
+  async upsertSection(pathValue, heading, bodyLines) {
+    const normalized = this.normalizePath(normalizeNotePath(pathValue));
+    await this.ensureParentFolder(normalized);
+
+    const section = [heading, ...bodyLines, ''].join('\n');
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (!existing) {
+      const content = [section].join('\n');
+      const file = await this.app.vault.create(normalized, content);
+      return { file, path: normalized, created: true, updated: false };
+    }
+
+    const oldContent = await this.app.vault.read(existing);
+    const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const sectionRegex = new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\n## |$)`, 'm');
+
+    if (sectionRegex.test(oldContent)) {
+      const nextContent = oldContent.replace(sectionRegex, section.trimEnd());
+      if (nextContent !== oldContent) {
+        await this.app.vault.modify(existing, nextContent);
+        return { file: existing, path: normalized, created: false, updated: true };
+      }
+      return { file: existing, path: normalized, created: false, updated: false };
+    }
+
+    const nextContent = `${oldContent.trimEnd()}\n\n${section}`;
+    await this.app.vault.modify(existing, nextContent);
+    return { file: existing, path: normalized, created: false, updated: true };
+  }
+
+  async ensureTodayNoticeNote() {
+    const dateText = this.getToday();
+    const pathValue = this.getTodayNoticePath(dateText);
+    const existing = this.app.vault.getAbstractFileByPath(pathValue);
+    if (existing) return { file: existing, path: pathValue, created: false };
+    const created = await this.createOrUpdateNote(pathValue, buildNoticeTemplate(dateText), { overwrite: false, backup: false });
+    return { file: created.file, path: created.path, created: created.created };
+  }
+
+  async applyGoogleFormLinks() {
+    await this.ensureRequiredFolders();
+    const summary = await this.createInitialStructure({ overwrite: false, backup: false });
+    const dateText = this.getToday();
+    const noticeInfo = await this.ensureTodayNoticeNote();
+    const lines = this.getGoogleFormLinkLines();
+    const heading = '## 🔗 Google Form 링크';
+
+    const homepageResult = await this.upsertSection(summary.homepagePath, heading, lines);
+    const noticeResult = await this.upsertSection(this.getTodayNoticePath(dateText), heading, lines);
+    const surveyPath = normalizeNotePath(`5. 설문/${dateText}-설문 링크`);
+    const surveyResult = await this.upsertSection(surveyPath, heading, lines);
+
+    const touched = [homepageResult, noticeResult, surveyResult]
+      .filter((item) => item.created || item.updated)
+      .map((item) => item.path);
+
+    await this.openFileByPath(summary.homepagePath);
+
+    return {
+      notice: touched.length > 0
+        ? `폼 링크를 ${touched.length}개 노트에 적용했습니다.`
+        : '폼 링크 변경사항이 없어 기존 내용을 유지했습니다.',
+      summary: {
+        touched,
+        noticeCreated: noticeInfo.created,
+      },
+    };
+  }
+
+  async generateWeeklyAutoReport() {
+    await this.ensureRequiredFolders();
+    const summary = await this.createInitialStructure({ overwrite: false, backup: false });
+    const dateText = this.getToday();
+    await this.ensureTodayNoticeNote();
+    const todayNews = await this.createOrUpdateNote(
+      this.getTodayNewsPath(dateText),
+      buildNewsTemplate({ dateText, formLink: this.getNewsSubmissionUrl() }),
+      { overwrite: false, backup: false }
+    );
+
+    const week = getWeekRange(this.now());
+    const reportPath = normalizeNotePath(`2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고`);
+    const reportBody = [
+      '---',
+      'category: 2. 주간학습안내',
+      'priority: HIGH',
+      'tags: [주간보고, 자동생성, 학급운영]',
+      `week_start: ${week.start}`,
+      `week_end: ${week.end}`,
+      `generated_on: ${dateText}`,
+      '---',
+      '',
+      `# ${week.start}~${week.end} 주간 자동 보고`,
+      '',
+      '## 핵심 링크',
+      `- 홈페이지: [[${summary.homepagePath.replace(/\.md$/i, '')}]]`,
+      `- 오늘 공지: [[${this.getTodayNoticePath(dateText).replace(/\.md$/i, '')}]]`,
+      `- 오늘 뉴스읽기 과제: [[${this.getTodayNewsPath(dateText).replace(/\.md$/i, '')}]]`,
+      '',
+      '## Google Form 링크 현황',
+      ...this.getGoogleFormLinkLines(),
+      '',
+      '## 주간 실행 체크리스트',
+      '- [ ] 이번 주 공지/가정통신문 업데이트',
+      '- [ ] 뉴스읽기 과제 배포 및 제출 현황 확인',
+      '- [ ] 학부모 설문/체크인 응답 점검',
+      '- [ ] 다음 주 안내 문구 초안 작성',
+      '',
+    ].join('\n');
+
+    const reportResult = await this.createOrUpdateNote(reportPath, reportBody, { overwrite: true, backup: false });
+    await this.openFileByPath(reportResult.path);
+
+    return {
+      notice: `주간 자동 보고서를 생성했습니다: ${reportResult.path}`,
+      summary: {
+        reportPath: reportResult.path,
+        homepagePath: summary.homepagePath,
+        todayNoticePath: this.getTodayNoticePath(dateText),
+        todayNewsPath: todayNews.path,
+        weekStart: week.start,
+        weekEnd: week.end,
+      },
+    };
   }
 
   async ensureFolder(pathValue) {
@@ -407,7 +595,7 @@ class ClassHomepageCore {
     );
     const newsTemplateResult = await this.createOrUpdateNote(
       this.getNewsTemplatePath(),
-      buildNewsTemplate({ formLink: this.settings.formLink }),
+      buildNewsTemplate({ formLink: this.getNewsSubmissionUrl() }),
       options
     );
 
@@ -463,7 +651,7 @@ class ClassHomepageCore {
     await this.ensureRequiredFolders();
     const result = await this.createOrUpdateNote(
       this.getNewsTemplatePath(),
-      buildNewsTemplate({ formLink: this.settings.formLink }),
+      buildNewsTemplate({ formLink: this.getNewsSubmissionUrl() }),
       { overwrite: false, backup: false }
     );
     await this.openFileByPath(result.path);
@@ -495,7 +683,7 @@ class ClassHomepageCore {
     const dateText = this.getToday();
     const result = await this.createOrUpdateNote(
       this.getTodayNewsPath(dateText),
-      buildNewsTemplate({ dateText, formLink: this.settings.formLink }),
+      buildNewsTemplate({ dateText, formLink: this.getNewsSubmissionUrl() }),
       { overwrite: false, backup: false }
     );
     await this.openFileByPath(result.path);

@@ -38,13 +38,17 @@
 ## 명령이 보이지 않을 때
 
 - Obsidian에서 플러그인 비활성/재활성
-- 커맨드 팔레트에서 아래 6개 명령 검색:
+- 커맨드 팔레트에서 아래 필수 6개 명령 검색:
   - `학급 홈페이지 열기`
   - `오늘 공지 섹션 추가`
   - `뉴스읽기 템플릿 생성`
   - `학급 기본 구조 재생성(백업 후 덮어쓰기)`
   - `오늘자 공지 노트 생성`
   - `오늘자 뉴스읽기 과제 생성`
+- 확장 명령도 함께 확인:
+  - `폼 링크 자동 적용`
+  - `주간 자동 보고서 생성`
+  - `미리캔버스 스타일 홈페이지 적용`
 
 ## 구조 생성이 안 될 때
 
@@ -66,3 +70,32 @@
 3. 재생성 후 아래 섹션 존재 확인
    - `오늘 운영 루틴 (수업 전/중/후)`
    - `학부모 소통 보드`
+   - `학부모 전달용 문구(복사)`
+
+## 로컬 sanity check가 실패할 때
+
+증상:
+- 릴리스 전 검증 또는 테스트 스크립트가 실패함
+
+확인 순서:
+1. Node 버전 확인 (`node -v`, `>=20` 필요)
+2. 의존성 재설치 (`npm ci`)
+3. 빠른 검증 재실행 (`npm run check:plugin`)
+4. 전체 테스트/체크 실행 (`npm run test`, `npm run check`)
+
+추가 확인:
+- frontmatter 오류는 `npm run validate:frontmatter` 로그의 파일 경로를 먼저 수정
+- sharenote 관련 실패는 `npm run preflight:sharenote` 결과의 누락 필드/경로를 수정
+
+## `validate:frontmatter`가 CRLF 문서에서 오작동할 때
+
+증상:
+- frontmatter가 분명히 있는데 `missing frontmatter start delimiter`가 반복됨
+
+확인:
+- 문서가 Windows/Google Drive 경유로 복사되며 `CRLF` 줄바꿈을 사용할 수 있음
+
+해결:
+1. 최신 `scripts/lib/frontmatter.mjs`가 적용되어 있는지 확인
+2. `npm run validate:frontmatter`를 다시 실행
+3. 여전히 실패하면 실제 frontmatter 블록 시작/종료 구분선(`---`)이 깨졌는지 확인
