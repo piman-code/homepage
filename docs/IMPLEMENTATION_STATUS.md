@@ -2,7 +2,7 @@
 
 Last updated: 2026-03-08
 Source spec: `docs/SPEC-homepage-plugin-v2.md`
-Current release baseline: `v0.2.5` (planned)
+Current release baseline: `v0.2.5`
 
 ## 1) Implemented
 
