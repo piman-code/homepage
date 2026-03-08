@@ -8,7 +8,10 @@ const require = createRequire(import.meta.url);
 const {
   ClassHomepageCore,
   DEFAULT_SETTINGS,
+  buildHomepageTemplate,
   getCommandDefinitions,
+  normalizeGoogleFormSettings,
+  normalizeHomepageUiSettings,
   normalizeNotePath,
   normalizeVaultPath,
 } = require('../../plugin-core.cjs');
@@ -155,11 +158,81 @@ results.push(
     assert.ok(homepageFile);
     const homepageContent = await vault.read(homepageFile);
 
+    assert.match(homepageContent, /## 🎛 오늘의 홈 대시보드/);
+    assert.match(homepageContent, /```homepage-dashboard/);
     assert.match(homepageContent, /## 🧭 오늘 운영 루틴 \(수업 전\/중\/후\)/);
     assert.match(homepageContent, /## 📣 학부모 소통 보드/);
     assert.match(homepageContent, /\[\[1\. 공지사항\/2026-02-28-공지\]\]/);
     assert.match(homepageContent, /## 🧾 학부모 전달용 문구\(복사\)/);
     assert.deepEqual(workspace.openedPaths, ['홈/홈페이지.md']);
+  })
+);
+
+results.push(
+  await runTest('existing homepage removes legacy hero intro when dashboard is refreshed', async () => {
+    const { core, vault } = createCore();
+
+    await vault.create('홈/홈페이지.md', [
+      '---',
+      'category: 홈',
+      'priority: HIGH',
+      '---',
+      '',
+      '# 🏫 우리 반 학급 홈페이지',
+      '',
+      '학생 성장과 공지 흐름을 하나의 홈에서 운영합니다.',
+      '',
+      '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
+      '- [ ] 확인',
+      '',
+    ].join('\n'));
+
+    await commandByName(core, '학급 홈페이지 열기').run();
+
+    const homepageContent = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    assert.match(homepageContent, /## 🎛 오늘의 홈 대시보드/);
+    assert.doesNotMatch(homepageContent, /^# 🏫 우리 반 학급 홈페이지/m);
+    assert.doesNotMatch(homepageContent, /학생 성장과 공지 흐름을 하나의 홈에서 운영합니다\./);
+  })
+);
+
+results.push(
+  await runTest('homepage refresh removes duplicate dashboard blocks and legacy teacher panel callout', async () => {
+    const { core, vault } = createCore();
+
+    await vault.create('홈/홈페이지.md', [
+      '---',
+      'category: 홈',
+      'priority: HIGH',
+      '---',
+      '',
+      '## 🎛 오늘의 홈 대시보드',
+      '> [!teacher] 클릭형 운영 패널',
+      '> - 아래 버튼에서 공지, 학생 성장, 칭찬 후보 흐름을 바로 실행할 수 있습니다.',
+      '> - 학생 성장 요약과 칭찬 후보는 OmniForge summary JSON이 없으면 샘플 데이터로 생성됩니다.',
+      '',
+      '```homepage-dashboard',
+      'date: 2026-02-28',
+      'notice: 1. 공지사항/2026-02-28-공지.md',
+      '```',
+      '',
+      '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
+      '- [ ] 확인',
+      '',
+      '## 🎛 오늘의 홈 대시보드',
+      '```homepage-dashboard',
+      'date: 2026-02-28',
+      'notice: 1. 공지사항/2026-02-28-공지.md',
+      '```',
+      '',
+    ].join('\n'));
+
+    await commandByName(core, '학급 홈페이지 열기').run();
+
+    const homepageContent = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    assert.equal((homepageContent.match(/## 🎛 오늘의 홈 대시보드/g) || []).length, 1);
+    assert.equal((homepageContent.match(/```homepage-dashboard/g) || []).length, 1);
+    assert.doesNotMatch(homepageContent, /클릭형 운영 패널/);
   })
 );
 
@@ -209,6 +282,71 @@ results.push(
     const { core, vault } = createCore({ homepagePath: '홈\\내반\\..\\홈페이지' });
     await commandByName(core, '학급 홈페이지 열기').run();
     assert.ok(vault.getAbstractFileByPath('홈/홈페이지.md'));
+  })
+);
+
+results.push(
+  await runTest('settings normalization trims values and keeps homepage UI bounds safe', async () => {
+    assert.deepEqual(
+      normalizeGoogleFormSettings({
+        newsSubmissionUrl: ' https://forms.gle/news ',
+        parentSurveyUrl: ' https://forms.gle/parent ',
+        weeklyCheckinUrl: ' ',
+        prefillTemplate: ' https://docs.google.com/forms/d/e/... ',
+        responseSheetUrl: ' https://docs.google.com/spreadsheets/d/... ',
+      }),
+      {
+        newsSubmissionUrl: 'https://forms.gle/news',
+        parentSurveyUrl: 'https://forms.gle/parent',
+        weeklyCheckinUrl: '',
+        prefillTemplate: 'https://docs.google.com/forms/d/e/...',
+        responseSheetUrl: 'https://docs.google.com/spreadsheets/d/...',
+      }
+    );
+
+    const normalizedUi = normalizeHomepageUiSettings({
+      heroHeight: 999,
+      heroOverlayStrength: -10,
+      showRelationshipGraph: false,
+      backgroundImageMode: 'mystery-mode',
+      backgroundImageExternalPath: ' "~/Pictures/home hero.png" ',
+    });
+
+    assert.equal(normalizedUi.heroHeight, 640);
+    assert.equal(normalizedUi.heroOverlayStrength, 10);
+    assert.equal(normalizedUi.showRelationshipGraph, false);
+    assert.equal(normalizedUi.backgroundImageMode, 'external');
+    assert.match(normalizedUi.backgroundImageExternalPath, /Pictures\/home hero\.png$/);
+  })
+);
+
+results.push(
+  await runTest('homepage template keeps dashboard bridge block without duplicating hero copy', async () => {
+    assert.equal(DEFAULT_SETTINGS.homepageUi.backgroundImagePath, '');
+    assert.equal(DEFAULT_SETTINGS.homepageUi.backgroundImageMode, 'none');
+    assert.equal(DEFAULT_SETTINGS.homepageUi.backgroundImageDataUrl, '');
+    assert.equal(DEFAULT_SETTINGS.homepageUi.backgroundImageLabel, '');
+    assert.equal(DEFAULT_SETTINGS.homepageUi.backgroundImageExternalPath, '');
+    assert.equal(DEFAULT_SETTINGS.homepageUi.heroHeight, 360);
+    assert.equal(DEFAULT_SETTINGS.homepageUi.heroOverlayStrength, 72);
+    assert.equal(DEFAULT_SETTINGS.homepageUi.showRelationshipGraph, true);
+
+    const template = buildHomepageTemplate('2026-02-28', {
+      heroEmoji: '🌿',
+      heroTitle: '2-1 성장 허브',
+      heroSubtitle: '학생 성장과 공지 흐름을 하나의 홈에서 운영합니다.',
+      themePreset: 'forest',
+      accentColor: '#2d8f5b',
+    });
+
+    assert.doesNotMatch(template, /2-1 성장 허브/);
+    assert.doesNotMatch(template, /학생 성장과 공지 흐름을 하나의 홈에서 운영합니다\./);
+    assert.match(template, /theme_preset: forest/);
+    assert.match(template, /accent_color: #2d8f5b/);
+    assert.match(template, /```homepage-dashboard/);
+    assert.match(template, /studentGraph: 6\. 학생성장\/관계그래프\/2026-02-28-학생 관계 그래프\.json/);
+    assert.match(template, /studentGraphView: 6\. 학생성장\/관계그래프\/2026-02-28-학생 관계 그래프 뷰\.md/);
+    assert.match(template, /\[\[6\. 학생성장\/칭찬후보\/2026-02-23~2026-03-01-칭찬 후보\]\]/);
   })
 );
 
@@ -266,6 +404,156 @@ results.push(
 );
 
 results.push(
+  await runTest('student growth summary command consumes JSON summary and updates homepage section', async () => {
+    const { core, vault, workspace } = createCore();
+    await commandByName(core, '학급 홈페이지 열기').run();
+
+    await vault.create(
+      '6. 학생성장/일일체크인-요약/2026-02-28-체크인 요약.json',
+      JSON.stringify({
+        contract: 'omniforge.checkin.summary.v1',
+        date: '2026-02-28',
+        classroomId: 'class-2-1',
+        submittedCount: 19,
+        missingCount: 5,
+        moodSignals: {
+          stable: 12,
+          low: 4,
+          highEnergy: 3,
+        },
+        supportFlags: [
+          { studentRef: 'stu_support_1', reason: 'support_request' },
+        ],
+        topWriters: [
+          { studentRef: 'stu_writer_1', score: 0.95 },
+          { studentRef: 'stu_writer_2', score: 0.9 },
+        ],
+      }, null, 2)
+    );
+
+    await commandByName(core, '학생 성장 요약 불러오기').run();
+
+    const noteFile = vault.getAbstractFileByPath('6. 학생성장/일일체크인-요약/2026-02-28-체크인 요약.md');
+    assert.ok(noteFile);
+    const noteContent = await vault.read(noteFile);
+    assert.match(noteContent, /# 2026-02-28 학생 성장 요약/);
+    assert.match(noteContent, /- 제출: 19명/);
+    assert.match(noteContent, /- 미제출: 5명/);
+    assert.match(noteContent, /stu_writer_1: 95점/);
+
+    const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    assert.match(homepage, /## 🌱 학생 성장 요약/);
+    assert.match(homepage, /\[\[6\. 학생성장\/일일체크인-요약\/2026-02-28-체크인 요약\]\]/);
+    assert.match(homepage, /지원 필요 신호: 1건/);
+    assert.deepEqual(workspace.openedPaths.at(-1), '홈/홈페이지.md');
+  })
+);
+
+results.push(
+  await runTest('praise candidates command creates sample summary and keeps homepage section single', async () => {
+    const { core, vault } = createCore();
+
+    await commandByName(core, '칭찬 후보 요약 불러오기').run();
+    await commandByName(core, '칭찬 후보 요약 불러오기').run();
+
+    const jsonFile = vault.getAbstractFileByPath('6. 학생성장/칭찬후보/2026-02-23~2026-03-01-칭찬 후보.json');
+    const noteFile = vault.getAbstractFileByPath('6. 학생성장/칭찬후보/2026-02-23~2026-03-01-칭찬 후보.md');
+    assert.ok(jsonFile);
+    assert.ok(noteFile);
+
+    const noteContent = await vault.read(noteFile);
+    assert.match(noteContent, /# 2026-W09 칭찬 후보 요약/);
+    assert.match(noteContent, /teacher_approval_required: true/);
+
+    const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    assert.match(homepage, /## 🌟 이번 주 칭찬 후보/);
+    const headingCount = (homepage.match(/## 🌟 이번 주 칭찬 후보/g) || []).length;
+    assert.equal(headingCount, 1);
+    assert.match(homepage, /\[\[6\. 학생성장\/칭찬후보\/2026-02-23~2026-03-01-칭찬 후보\]\]/);
+  })
+);
+
+results.push(
+  await runTest('opening homepage refreshes dated markers and rewrites synced summary sections without duplicates', async () => {
+    const { core, vault } = createCore();
+
+    await vault.create('홈/홈페이지.md', [
+      '---',
+      'category: 홈',
+      'priority: HIGH',
+      'share_updated: 2026-02-20',
+      '---',
+      '',
+      '## 🎛 오늘의 홈 대시보드',
+      '```homepage-dashboard',
+      'date: 2026-02-20',
+      'notice: 1. 공지사항/2026-02-20-공지.md',
+      '```',
+      '',
+      '## 📣 학부모 소통 보드',
+      '| 항목 | 오늘 내용 | 확인 |',
+      '| --- | --- | --- |',
+      '| 공지 링크 | [[1. 공지사항/2026-02-20-공지]] | [ ] |',
+      '',
+      '## 🔔 오늘 공지',
+      '- [ ] 2026-02-20 공지 게시',
+      '',
+      '## 🌱 학생 성장 요약',
+      '- 오늘 체크인 요약: [[6. 학생성장/일일체크인-요약/2026-02-20-체크인 요약]]',
+      '- 제출 현황: 10명 제출 / 10명 미제출',
+      '- 지원 필요 신호: 2건',
+      '- 우수 기록자: old_writer',
+      '- 오늘 체크인 요약: [[6. 학생성장/일일체크인-요약/2026-02-20-체크인 요약]]',
+      '- 제출 현황: 10명 제출 / 10명 미제출',
+      '',
+      '## 🌟 이번 주 칭찬 후보',
+      '- 후보 요약: [[6. 학생성장/칭찬후보/2026-02-16~2026-02-22-칭찬 후보]]',
+      '- 기록 성실: old_writer',
+      '',
+    ].join('\n'));
+
+    await vault.create(
+      '6. 학생성장/일일체크인-요약/2026-02-28-체크인 요약.json',
+      JSON.stringify({
+        contract: 'omniforge.checkin.summary.v1',
+        date: '2026-02-28',
+        classroomId: 'class-2-1',
+        submittedCount: 23,
+        missingCount: 1,
+        supportFlags: [{ studentRef: 'stu_need_help', reason: 'support_request' }],
+        topWriters: [{ studentRef: 'stu_writer_today', score: 0.93 }],
+      }, null, 2)
+    );
+
+    await vault.create(
+      '6. 학생성장/칭찬후보/2026-02-23~2026-03-01-칭찬 후보.json',
+      JSON.stringify({
+        contract: 'omniforge.praise.candidates.v1',
+        period: '2026-W09',
+        categories: {
+          daily_writer: [{ studentRef: 'stu_writer_today', score: 0.91 }],
+          goal_keeper: [{ studentRef: 'stu_goal_keeper', score: 0.82 }],
+          question_asker: [{ studentRef: 'stu_question', score: 0.8 }],
+        },
+      }, null, 2)
+    );
+
+    await commandByName(core, '학급 홈페이지 열기').run();
+
+    const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
+    assert.match(homepage, /share_updated: 2026-02-28/);
+    assert.match(homepage, /\| 공지 링크 \| \[\[1\. 공지사항\/2026-02-28-공지\]\] \| \[ \] \|/);
+    assert.match(homepage, /- \[ \] 2026-02-28 공지 게시/);
+    assert.match(homepage, /23명 제출 \/ 1명 미제출/);
+    assert.match(homepage, /stu_writer_today/);
+    assert.equal((homepage.match(/오늘 체크인 요약:/g) || []).length, 1);
+    assert.equal((homepage.match(/## 🌱 학생 성장 요약/g) || []).length, 1);
+    assert.match(homepage, /stu_goal_keeper/);
+    assert.equal((homepage.match(/## 🌟 이번 주 칭찬 후보/g) || []).length, 1);
+  })
+);
+
+results.push(
   await runTest('BRAT-required files exist and parse', async () => {
     const testDir = path.dirname(fileURLToPath(import.meta.url));
     const rootDir = path.resolve(testDir, '../..');
@@ -286,6 +574,21 @@ results.push(
     assert.ok(manifest.version in versions);
     assert.equal(versions[manifest.version], manifest.minAppVersion);
     assert.match(mainText, /ClassHomepageBratLite/);
+    assert.match(mainText, /registerMarkdownCodeBlockProcessor\('homepage-dashboard'/);
+    assert.match(mainText, /registerMarkdownCodeBlockProcessor\('student-relationship-graph'/);
+    assert.match(mainText, /getLeaf\('tab'\)/);
+    assert.match(mainText, /backgroundImageExternalPath/);
+    assert.match(mainText, /backgroundImageDataUrl/);
+    assert.match(mainText, /backgroundImageLabel/);
+    assert.match(mainText, /pickHomepageImageFile/);
+    assert.match(mainText, /readVaultImageAsDataUrl/);
+    assert.match(mainText, /studentGraph:/);
+    assert.match(mainText, /studentGraphView:/);
+    assert.match(mainText, /pointerdown/);
+    assert.match(mainText, /pathToFileURL/);
+    assert.match(mainText, /heroOverlayStrength/);
+    assert.match(mainText, /showRelationshipGraph/);
+    assert.match(mainText, /heroHeight/);
     assert.doesNotMatch(mainText, /require\(\s*['"]\.\.?\//);
   })
 );

@@ -1,9 +1,32 @@
 'use strict';
 
+const os = require('os');
+const path = require('path');
+
+const HOMEPAGE_THEME_PRESETS = Object.freeze(['sunrise', 'ocean', 'forest']);
+const HOMEPAGE_BACKGROUND_MODES = Object.freeze(['none', 'embedded', 'vault', 'external']);
+
+const DEFAULT_HOMEPAGE_UI = Object.freeze({
+  heroEmoji: '🏫',
+  heroTitle: '우리 반 학급 홈페이지',
+  heroSubtitle: '공지, 과제, 학생 성장 흐름을 한 곳에서 정리합니다.',
+  themePreset: 'sunrise',
+  accentColor: '#2f6fdd',
+  heroHeight: 360,
+  heroOverlayStrength: 72,
+  showRelationshipGraph: true,
+  backgroundImageMode: 'none',
+  backgroundImageDataUrl: '',
+  backgroundImageLabel: '',
+  backgroundImagePath: '',
+  backgroundImageExternalPath: '',
+});
+
 const DEFAULT_SETTINGS = Object.freeze({
   homepagePath: '홈/홈페이지.md',
   newsFolder: '3. 뉴스읽기',
   formLink: '',
+  homepageUi: DEFAULT_HOMEPAGE_UI,
   googleForm: {
     newsSubmissionUrl: '',
     parentSurveyUrl: '',
@@ -20,8 +43,15 @@ const REQUIRED_FOLDERS = Object.freeze([
   '3. 뉴스읽기',
   '4. 수업활동',
   '5. 설문',
+  '6. 학생성장',
+  '6. 학생성장/일일체크인-요약',
+  '6. 학생성장/목표추적-요약',
+  '6. 학생성장/질문활동-요약',
+  '6. 학생성장/관계그래프',
+  '6. 학생성장/칭찬후보',
   '999-Attachments',
   'docs',
+  'docs/contracts',
 ]);
 
 const DEFAULT_PATHS = Object.freeze({
@@ -49,6 +79,8 @@ const COMMAND_SPECS = Object.freeze([
   { id: 'create-today-news-assignment', name: '오늘자 뉴스읽기 과제 생성', method: 'createTodayNewsAssignment' },
   { id: 'apply-google-form-links', name: '폼 링크 자동 적용', method: 'applyGoogleFormLinks' },
   { id: 'generate-weekly-auto-report', name: '주간 자동 보고서 생성', method: 'generateWeeklyAutoReport' },
+  { id: 'load-student-growth-summary', name: '학생 성장 요약 불러오기', method: 'loadStudentGrowthSummary' },
+  { id: 'load-praise-candidates-summary', name: '칭찬 후보 요약 불러오기', method: 'loadPraiseCandidatesSummary' },
   { id: 'apply-miricanvas-homepage-template', name: '미리캔버스 스타일 홈페이지 적용', method: 'applyMiricanvasHomepageTemplate' },
 ]);
 
@@ -82,6 +114,78 @@ function normalizeNotePath(value, fallback = '') {
   return normalized.toLowerCase().endsWith('.md') ? normalized : `${normalized}.md`;
 }
 
+function normalizeExternalImagePath(value, fallback = '') {
+  const raw = String(value || fallback || '').trim().replace(/^["']|["']$/g, '');
+  if (!raw) {
+    return '';
+  }
+  if (/^(?:https?|file):\/\//i.test(raw)) {
+    return raw;
+  }
+  if (raw.startsWith('~/')) {
+    return path.join(os.homedir(), raw.slice(2));
+  }
+  return raw;
+}
+
+function resolveHomepageBackgroundMode(modeValue, vaultPath, externalPath, dataUrl) {
+  const mode = String(modeValue || '').trim();
+  if (HOMEPAGE_BACKGROUND_MODES.includes(mode)) {
+    return mode;
+  }
+  if (dataUrl) {
+    return 'embedded';
+  }
+  if (externalPath) {
+    return 'external';
+  }
+  if (vaultPath) {
+    return 'vault';
+  }
+  return 'none';
+}
+
+function normalizeDataUrl(value, fallback = '') {
+  const normalized = String(value || fallback || '').trim();
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,/.test(normalized) ? normalized : '';
+}
+
+function normalizeBackgroundLabel(value, fallback = '') {
+  return String(value || fallback || '').trim();
+}
+
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeHeroHeight(value, fallback = DEFAULT_HOMEPAGE_UI.heroHeight) {
+  return Math.round(clampNumber(value, 240, 640, fallback));
+}
+
+function normalizeHeroOverlayStrength(value, fallback = DEFAULT_HOMEPAGE_UI.heroOverlayStrength) {
+  return Math.round(clampNumber(value, 10, 100, fallback));
+}
+
+function normalizeBooleanSetting(value, fallback = false) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'true') {
+      return true;
+    }
+    if (normalized === 'false') {
+      return false;
+    }
+  }
+  return fallback;
+}
+
 function pad2(value) {
   return String(value).padStart(2, '0');
 }
@@ -111,7 +215,310 @@ function getWeekRange(date) {
   };
 }
 
-function buildHomepageTemplate(dateText) {
+function normalizeAccentColor(value, fallback = DEFAULT_HOMEPAGE_UI.accentColor) {
+  const normalized = String(value || '').trim();
+  return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(normalized) ? normalized : fallback;
+}
+
+function normalizeHomepageUiSettings(value = {}) {
+  const themePreset = String(value.themePreset || '').trim();
+  const backgroundImageDataUrl = normalizeDataUrl(value.backgroundImageDataUrl, '');
+  const backgroundImagePath = normalizeVaultPath(value.backgroundImagePath, '');
+  const backgroundImageExternalPath = normalizeExternalImagePath(value.backgroundImageExternalPath, '');
+  const backgroundImageLabel = normalizeBackgroundLabel(
+    value.backgroundImageLabel,
+    backgroundImagePath || backgroundImageExternalPath,
+  );
+  return {
+    heroEmoji: String(value.heroEmoji || DEFAULT_HOMEPAGE_UI.heroEmoji).trim() || DEFAULT_HOMEPAGE_UI.heroEmoji,
+    heroTitle: String(value.heroTitle || DEFAULT_HOMEPAGE_UI.heroTitle).trim() || DEFAULT_HOMEPAGE_UI.heroTitle,
+    heroSubtitle: String(value.heroSubtitle || DEFAULT_HOMEPAGE_UI.heroSubtitle).trim() || DEFAULT_HOMEPAGE_UI.heroSubtitle,
+    themePreset: HOMEPAGE_THEME_PRESETS.includes(themePreset) ? themePreset : DEFAULT_HOMEPAGE_UI.themePreset,
+    accentColor: normalizeAccentColor(value.accentColor, DEFAULT_HOMEPAGE_UI.accentColor),
+    heroHeight: normalizeHeroHeight(value.heroHeight, DEFAULT_HOMEPAGE_UI.heroHeight),
+    heroOverlayStrength: normalizeHeroOverlayStrength(value.heroOverlayStrength, DEFAULT_HOMEPAGE_UI.heroOverlayStrength),
+    showRelationshipGraph: normalizeBooleanSetting(value.showRelationshipGraph, DEFAULT_HOMEPAGE_UI.showRelationshipGraph),
+    backgroundImageMode: resolveHomepageBackgroundMode(value.backgroundImageMode, backgroundImagePath, backgroundImageExternalPath, backgroundImageDataUrl),
+    backgroundImageDataUrl,
+    backgroundImageLabel,
+    backgroundImagePath,
+    backgroundImageExternalPath,
+  };
+}
+
+function formatIsoWeek(date) {
+  const utcDate = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = utcDate.getUTCDay() || 7;
+  utcDate.setUTCDate(utcDate.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(utcDate.getUTCFullYear(), 0, 1));
+  const weekNumber = Math.ceil((((utcDate - yearStart) / 86400000) + 1) / 7);
+  return `${utcDate.getUTCFullYear()}-W${pad2(weekNumber)}`;
+}
+
+function buildSampleCheckinSummary(dateText) {
+  return {
+    contract: 'omniforge.checkin.summary.v1',
+    date: dateText,
+    classroomId: 'class-2-1',
+    submittedCount: 21,
+    missingCount: 3,
+    moodSignals: {
+      stable: 14,
+      low: 5,
+      highEnergy: 2,
+    },
+    supportFlags: [
+      { studentRef: 'stu_ab12cd34', reason: 'support_request' },
+    ],
+    topWriters: [
+      { studentRef: 'stu_ef56gh78', score: 0.91 },
+      { studentRef: 'stu_ij90kl12', score: 0.87 },
+      { studentRef: 'stu_mn34op56', score: 0.83 },
+    ],
+  };
+}
+
+function buildSamplePraiseCandidates(period) {
+  return {
+    contract: 'omniforge.praise.candidates.v1',
+    period,
+    classroomId: 'class-2-1',
+    categories: {
+      daily_writer: [
+        { studentRef: 'stu_ef56gh78', score: 0.93 },
+        { studentRef: 'stu_ij90kl12', score: 0.89 },
+      ],
+      goal_keeper: [
+        { studentRef: 'stu_qr78st90', score: 0.88 },
+      ],
+      question_asker: [
+        { studentRef: 'stu_uv12wx34', score: 0.9 },
+      ],
+    },
+    teacherApprovalRequired: true,
+  };
+}
+
+function formatMaybeCount(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? `${value}명` : '확인 필요';
+}
+
+function getStudentRefValue(item) {
+  if (typeof item === 'string') return item.trim();
+  return String(item && item.studentRef ? item.studentRef : '').trim();
+}
+
+function formatStudentRefs(items) {
+  if (!Array.isArray(items) || items.length === 0) return '없음';
+  return items
+    .slice(0, 3)
+    .map((item) => getStudentRefValue(item))
+    .filter(Boolean)
+    .join(', ') || '없음';
+}
+
+function formatScore(score) {
+  if (typeof score !== 'number' || Number.isNaN(score)) return '-';
+  return `${Math.round(score * 100)}점`;
+}
+
+function formatNoteLink(pathValue, fallbackText = '아직 연결된 노트가 없습니다.') {
+  const normalized = normalizeNotePath(pathValue, '');
+  return normalized ? `[[${normalized.replace(/\.md$/i, '')}]]` : fallbackText;
+}
+
+function extractMarkdownSection(content, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = String(content || '').match(new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\r?\\n## |$)`));
+  return match ? match[0] : '';
+}
+
+function parseCountBullet(content, label) {
+  const match = String(content || '').match(new RegExp(`-\\s*${label}:\\s*(\\d+)명`, 'm'));
+  return match ? Number(match[1]) : null;
+}
+
+function parseStudentRefBullets(section) {
+  return String(section || '')
+    .split(/\r?\n/)
+    .map((line) => {
+      const match = line.match(/^- +([^:\n]+?)(?::|$)/);
+      if (!match) return '';
+      const value = String(match[1] || '').trim();
+      if (!value || /^(?:없음|후보 없음|지원 없음)$/u.test(value)) return '';
+      return value;
+    })
+    .filter(Boolean)
+    .map((studentRef) => ({ studentRef }));
+}
+
+function parseStudentGrowthSummaryFromNote(content = '') {
+  const supportFlags = parseStudentRefBullets(extractMarkdownSection(content, '## 지원 필요 신호'));
+  const topWriters = parseStudentRefBullets(extractMarkdownSection(content, '## 우수 기록자'));
+  return {
+    submittedCount: parseCountBullet(content, '제출'),
+    missingCount: parseCountBullet(content, '미제출'),
+    supportFlags,
+    topWriters,
+  };
+}
+
+function parsePraiseCandidatesFromNote(content = '') {
+  return {
+    categories: {
+      daily_writer: parseStudentRefBullets(extractMarkdownSection(content, '## 기록 성실 후보')),
+      goal_keeper: parseStudentRefBullets(extractMarkdownSection(content, '## 목표 실천 후보')),
+      question_asker: parseStudentRefBullets(extractMarkdownSection(content, '## 질문 활동 후보')),
+    },
+  };
+}
+
+function buildStudentGrowthHomepageLines(summary = {}, notePath = '') {
+  const topWriters = Array.isArray(summary.topWriters) ? summary.topWriters : [];
+  const supportFlags = Array.isArray(summary.supportFlags) ? summary.supportFlags : [];
+  return [
+    `- 오늘 체크인 요약: ${formatNoteLink(notePath)}`,
+    `- 제출 현황: ${formatMaybeCount(summary.submittedCount)} 제출 / ${formatMaybeCount(summary.missingCount)} 미제출`,
+    `- 지원 필요 신호: ${supportFlags.length}건`,
+    `- 우수 기록자: ${formatStudentRefs(topWriters)}`,
+  ];
+}
+
+function buildPendingStudentGrowthHomepageLines(notePath = '') {
+  return [
+    notePath
+      ? `- 오늘 체크인 요약: ${formatNoteLink(notePath)}`
+      : '- 오늘 체크인 요약: 아직 연결된 요약 노트가 없습니다.',
+    '- 제출 현황: 아직 동기화되지 않음',
+    '- 지원 필요 신호: 아직 동기화되지 않음',
+    '- 실행: 상단 버튼으로 샘플 생성 또는 OmniForge 요약 반영',
+  ];
+}
+
+function buildPraiseCandidatesHomepageLines(summary = {}, notePath = '') {
+  const categories = summary && typeof summary.categories === 'object' ? summary.categories : {};
+  return [
+    `- 후보 요약: ${formatNoteLink(notePath)}`,
+    `- 기록 성실: ${formatStudentRefs(categories.daily_writer)}`,
+    `- 목표 실천: ${formatStudentRefs(categories.goal_keeper)}`,
+    `- 질문 활동: ${formatStudentRefs(categories.question_asker)}`,
+    '- 공개 전 안내: 교사 승인 후 공개',
+  ];
+}
+
+function buildPendingPraiseHomepageLines(notePath = '') {
+  return [
+    notePath
+      ? `- 후보 요약: ${formatNoteLink(notePath)}`
+      : '- 후보 요약: 아직 연결된 칭찬 후보 노트가 없습니다.',
+    '- 기록 성실: 아직 동기화되지 않음',
+    '- 목표 실천: 아직 동기화되지 않음',
+    '- 질문 활동: 아직 동기화되지 않음',
+    '- 공개 전 안내: 교사 승인 후 공개',
+  ];
+}
+
+function buildStudentGrowthSummaryNote(summary = {}) {
+  const moodSignals = summary.moodSignals && typeof summary.moodSignals === 'object' ? summary.moodSignals : {};
+  const supportFlags = Array.isArray(summary.supportFlags) ? summary.supportFlags : [];
+  const topWriters = Array.isArray(summary.topWriters) ? summary.topWriters : [];
+
+  return [
+    '---',
+    'category: 6. 학생성장',
+    'priority: MEDIUM',
+    'tags: [학생성장, 체크인, omniforge-bridge]',
+    `summary_date: ${String(summary.date || '').trim()}`,
+    `classroom_id: ${String(summary.classroomId || '').trim()}`,
+    '---',
+    '',
+    `# ${String(summary.date || '오늘')} 학생 성장 요약`,
+    '',
+    '## 제출 현황',
+    `- 제출: ${formatMaybeCount(summary.submittedCount)}`,
+    `- 미제출: ${formatMaybeCount(summary.missingCount)}`,
+    '',
+    '## 기분 신호',
+    `- 안정: ${typeof moodSignals.stable === 'number' ? moodSignals.stable : 0}명`,
+    `- 낮은 기분: ${typeof moodSignals.low === 'number' ? moodSignals.low : 0}명`,
+    `- 높은 에너지: ${typeof moodSignals.highEnergy === 'number' ? moodSignals.highEnergy : 0}명`,
+    '',
+    '## 지원 필요 신호',
+    ...(supportFlags.length > 0
+      ? supportFlags.map((item) => `- ${item.studentRef}: ${item.reason || '확인 필요'}`)
+      : ['- 특이 신호 없음']),
+    '',
+    '## 우수 기록자',
+    ...(topWriters.length > 0
+      ? topWriters.map((item) => `- ${item.studentRef}: ${formatScore(item.score)}`)
+      : ['- 우수 기록자 정보 없음']),
+    '',
+    '## 비고',
+    '- 이 노트는 OmniForge summary contract 또는 샘플 JSON을 읽어 생성됩니다.',
+    '- 학생 실명과 민감 원문은 포함하지 않습니다.',
+    '',
+  ].join('\n');
+}
+
+function buildPraiseCandidatesNote(summary = {}) {
+  const categories = summary.categories && typeof summary.categories === 'object' ? summary.categories : {};
+  const dailyWriter = Array.isArray(categories.daily_writer) ? categories.daily_writer : [];
+  const goalKeeper = Array.isArray(categories.goal_keeper) ? categories.goal_keeper : [];
+  const questionAsker = Array.isArray(categories.question_asker) ? categories.question_asker : [];
+
+  return [
+    '---',
+    'category: 6. 학생성장',
+    'priority: MEDIUM',
+    'tags: [학생성장, 칭찬후보, omniforge-bridge]',
+    `period: ${String(summary.period || '').trim()}`,
+    `classroom_id: ${String(summary.classroomId || '').trim()}`,
+    'teacher_approval_required: true',
+    '---',
+    '',
+    `# ${String(summary.period || '이번 주')} 칭찬 후보 요약`,
+    '',
+    '## 기록 성실 후보',
+    ...(dailyWriter.length > 0
+      ? dailyWriter.map((item) => `- ${item.studentRef}: ${formatScore(item.score)}`)
+      : ['- 후보 없음']),
+    '',
+    '## 목표 실천 후보',
+    ...(goalKeeper.length > 0
+      ? goalKeeper.map((item) => `- ${item.studentRef}: ${formatScore(item.score)}`)
+      : ['- 후보 없음']),
+    '',
+    '## 질문 활동 후보',
+    ...(questionAsker.length > 0
+      ? questionAsker.map((item) => `- ${item.studentRef}: ${formatScore(item.score)}`)
+      : ['- 후보 없음']),
+    '',
+    '## 공개 전 안내',
+    '- 자동 추천은 보조 지표입니다.',
+    '- 공개 칭찬/스티커 부여 전 반드시 교사 검토가 필요합니다.',
+    '',
+  ].join('\n');
+}
+
+function buildHomepageDashboardBody(dateText) {
+  const week = getWeekRange(new Date(`${dateText}T12:00:00`));
+  return [
+    '```homepage-dashboard',
+    `date: ${dateText}`,
+    `notice: 1. 공지사항/${dateText}-공지.md`,
+    'newsTemplate: docs/뉴스읽기-템플릿.md',
+    `weeklyReport: 2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고.md`,
+    `growth: 6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.md`,
+    `studentGraph: 6. 학생성장/관계그래프/${dateText}-학생 관계 그래프.json`,
+    `studentGraphView: 6. 학생성장/관계그래프/${dateText}-학생 관계 그래프 뷰.md`,
+    `praise: 6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.md`,
+    '```',
+  ];
+}
+
+function buildHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE_UI) {
+  const ui = normalizeHomepageUiSettings(homepageUi);
+  const week = getWeekRange(new Date(`${dateText}T12:00:00`));
   return [
     '---',
     'category: 홈',
@@ -120,14 +527,12 @@ function buildHomepageTemplate(dateText) {
     'share_link:',
     `share_updated: ${dateText}`,
     'target: 학부모/학생',
+    `theme_preset: ${ui.themePreset}`,
+    `accent_color: ${ui.accentColor}`,
     '---',
     '',
-    '# 🏫 학급 홈페이지',
-    '',
-    '> [!info] 운영 안내',
-    '> - 대상: 학부모 · 학생',
-    '> - 업데이트: 매일 수업 전/후',
-    '> - 문의: 클래스룸 메시지 또는 담임 이메일',
+    '## 🎛 오늘의 홈 대시보드',
+    ...buildHomepageDashboardBody(dateText),
     '',
     '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
     '',
@@ -180,6 +585,11 @@ function buildHomepageTemplate(dateText) {
     '- [[3. 뉴스읽기]] 오늘 과제 배부',
     '- [[5. 설문]] 제출 현황 확인',
     '',
+    '## 🌱 학생 성장 브리지',
+    `- 오늘 체크인 요약 노트: [[6. 학생성장/일일체크인-요약/${dateText}-체크인 요약]]`,
+    `- 이번 주 칭찬 후보 노트: [[6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보]]`,
+    '- 상단 카드의 버튼으로 최신 요약을 불러오고, 교사 검토 후 공개 여부를 결정합니다.',
+    '',
     '## 🧾 학부모 전달용 문구(복사)',
     '- 오늘 학급 공지와 준비물 안내를 업데이트했습니다. 확인 부탁드립니다.',
     '- 뉴스읽기 과제와 설문 링크를 함께 전달합니다.',
@@ -194,7 +604,8 @@ function buildHomepageTemplate(dateText) {
   ].join('\n');
 }
 
-function buildMiricanvasHomepageTemplate(dateText) {
+function buildMiricanvasHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE_UI) {
+  const ui = normalizeHomepageUiSettings(homepageUi);
   return [
     '---',
     'category: 홈',
@@ -204,9 +615,14 @@ function buildMiricanvasHomepageTemplate(dateText) {
     `share_updated: ${dateText}`,
     'target: 학부모/학생',
     'theme: miricanvas-like',
+    `theme_preset: ${ui.themePreset}`,
+    `accent_color: ${ui.accentColor}`,
     '---',
     '',
-    '# 학부모님께 드리는 말씀',
+    '## 🎛 오늘의 홈 대시보드',
+    ...buildHomepageDashboardBody(dateText),
+    '',
+    '## 학부모님께 드리는 말씀',
     '',
     '## Properties',
     '- share_link: ',
@@ -251,6 +667,85 @@ function buildMiricanvasHomepageTemplate(dateText) {
     '- [ ] 문의사항 전달',
     '',
   ].join('\n');
+}
+
+function findHomepageDashboardInsertIndex(content) {
+  const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  const start = frontmatterMatch ? frontmatterMatch[0].length : 0;
+  const headingMatch = content.slice(start).match(/\r?\n## /);
+  if (headingMatch && typeof headingMatch.index === 'number') {
+    return start + headingMatch.index + headingMatch[0].length - 3;
+  }
+  return content.length;
+}
+
+function stripLegacyHomepageIntro(content) {
+  const frontmatterMatch = content.match(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/);
+  const prefix = frontmatterMatch ? frontmatterMatch[0] : '';
+  const body = frontmatterMatch ? content.slice(prefix.length) : content;
+  const nextBody = body.replace(
+    /^\s*# .+\r?\n(?:\r?\n)?(?:[^\r\n#].*\r?\n)?(?:\r?\n)*(?=## 🎛 오늘의 홈 대시보드)/,
+    ''
+  );
+  return `${prefix}${nextBody.replace(/^\s+/, '\n')}`;
+}
+
+function stripLegacyHomepagePanelCallout(content) {
+  return String(content || '').replace(
+    /(?:^|\r?\n)> \[!teacher\] 클릭형 운영 패널\r?\n(?:>.*\r?\n)*/g,
+    '\n'
+  );
+}
+
+function dedupeHomepageDashboardSections(content) {
+  const heading = '## 🎛 오늘의 홈 대시보드';
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let seen = 0;
+  return String(content || '').replace(
+    new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\r?\\n## |$)`, 'g'),
+    (section) => {
+      seen += 1;
+      return seen === 1 ? section : '';
+    }
+  );
+}
+
+function dedupeHomepageDashboardCodeBlocks(content) {
+  let seen = 0;
+  return String(content || '').replace(/```homepage-dashboard[\s\S]*?```/g, (block) => {
+    seen += 1;
+    return seen === 1 ? block : '';
+  });
+}
+
+function cleanupHomepageDashboardArtifactsText(content) {
+  let next = String(content || '');
+  next = stripLegacyHomepageIntro(next);
+  next = stripLegacyHomepagePanelCallout(next);
+  next = dedupeHomepageDashboardSections(next);
+  next = dedupeHomepageDashboardCodeBlocks(next);
+  next = next.replace(/\n{3,}/g, '\n\n');
+  return next.trimEnd().concat('\n');
+}
+
+function dedupeSectionByHeading(content, heading) {
+  const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  let seen = 0;
+  return String(content || '')
+    .replace(new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\r?\\n## |$)`, 'g'), (section) => {
+      seen += 1;
+      return seen === 1 ? section : '';
+    })
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+function syncHomepageOperationalText(content, dateText) {
+  let next = String(content || '');
+  if (!next) return next;
+  next = next.replace(/^share_updated:\s*.*$/m, `share_updated: ${dateText}`);
+  next = next.replace(/^\| 공지 링크 \| .* \| \[ \] \|$/m, `| 공지 링크 | [[1. 공지사항/${dateText}-공지]] | [ ] |`);
+  next = next.replace(/^- \[ \] \d{4}-\d{2}-\d{2} 공지 게시$/m, `- [ ] ${dateText} 공지 게시`);
+  return next;
 }
 
 function buildNoticeTemplate(dateText) {
@@ -348,6 +843,22 @@ class ClassHomepageCore {
     return this.normalizePath(normalizeNotePath(DEFAULT_PATHS.newsTemplate, DEFAULT_PATHS.newsTemplate));
   }
 
+  getStudentGrowthCheckinJsonPath(dateText) {
+    return this.normalizePath(normalizeVaultPath(`6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.json`));
+  }
+
+  getStudentGrowthCheckinNotePath(dateText) {
+    return this.normalizePath(normalizeNotePath(`6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.md`));
+  }
+
+  getPraiseCandidatesJsonPath(week) {
+    return this.normalizePath(normalizeVaultPath(`6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.json`));
+  }
+
+  getPraiseCandidatesNotePath(week) {
+    return this.normalizePath(normalizeNotePath(`6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.md`));
+  }
+
   getNewsSubmissionUrl() {
     const googleFormLink = this.settings.googleForm && this.settings.googleForm.newsSubmissionUrl;
     return String(googleFormLink || this.settings.formLink || '').trim();
@@ -396,10 +907,10 @@ class ClassHomepageCore {
 
     const oldContent = await this.app.vault.read(existing);
     const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const sectionRegex = new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\n## |$)`, 'm');
+    const sectionRegex = new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\r?\\n## |$)`);
 
     if (sectionRegex.test(oldContent)) {
-      const nextContent = oldContent.replace(sectionRegex, section.trimEnd());
+      const nextContent = dedupeSectionByHeading(oldContent.replace(sectionRegex, section.trimEnd()), heading);
       if (nextContent !== oldContent) {
         await this.app.vault.modify(existing, nextContent);
         return { file: existing, path: normalized, created: false, updated: true };
@@ -407,9 +918,72 @@ class ClassHomepageCore {
       return { file: existing, path: normalized, created: false, updated: false };
     }
 
-    const nextContent = `${oldContent.trimEnd()}\n\n${section}`;
+    const nextContent = dedupeSectionByHeading(`${oldContent.trimEnd()}\n\n${section}`, heading);
     await this.app.vault.modify(existing, nextContent);
     return { file: existing, path: normalized, created: false, updated: true };
+  }
+
+  async upsertHomepageDashboardSection(pathValue, dateText) {
+    const normalized = this.normalizePath(normalizeNotePath(pathValue));
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (!existing) {
+      return { path: normalized, created: false, updated: false };
+    }
+
+    const heading = '## 🎛 오늘의 홈 대시보드';
+    const section = [heading, ...buildHomepageDashboardBody(dateText), ''].join('\n');
+    const oldContent = await this.app.vault.read(existing);
+    const escapedHeading = heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const sectionRegex = new RegExp(`${escapedHeading}[\\s\\S]*?(?=\\r?\\n## |$)`);
+
+    let nextContent = oldContent;
+    if (sectionRegex.test(oldContent)) {
+      nextContent = oldContent.replace(sectionRegex, section.trimEnd());
+    } else {
+      const insertIndex = findHomepageDashboardInsertIndex(oldContent);
+      const before = oldContent.slice(0, insertIndex).trimEnd();
+      const after = oldContent.slice(insertIndex).trimStart();
+      nextContent = after
+        ? `${before}\n\n${section}\n${after}`
+        : `${before}\n\n${section}`;
+    }
+
+    if (nextContent !== oldContent) {
+      await this.app.vault.modify(existing, nextContent);
+      return { file: existing, path: normalized, created: false, updated: true };
+    }
+
+    return { file: existing, path: normalized, created: false, updated: false };
+  }
+
+  async cleanupHomepageHeroIntro(pathValue) {
+    const normalized = this.normalizePath(normalizeNotePath(pathValue));
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (!existing) return { path: normalized, updated: false };
+
+    const oldContent = await this.app.vault.read(existing);
+    const nextContent = cleanupHomepageDashboardArtifactsText(oldContent);
+    if (nextContent !== oldContent) {
+      await this.app.vault.modify(existing, nextContent);
+      return { file: existing, path: normalized, updated: true };
+    }
+
+    return { file: existing, path: normalized, updated: false };
+  }
+
+  async syncHomepageOperationalMarkers(pathValue, dateText) {
+    const normalized = this.normalizePath(normalizeNotePath(pathValue));
+    const existing = this.app.vault.getAbstractFileByPath(normalized);
+    if (!existing) return { path: normalized, updated: false };
+
+    const oldContent = await this.app.vault.read(existing);
+    const nextContent = syncHomepageOperationalText(oldContent, dateText);
+    if (nextContent !== oldContent) {
+      await this.app.vault.modify(existing, nextContent);
+      return { file: existing, path: normalized, updated: true };
+    }
+
+    return { file: existing, path: normalized, updated: false };
   }
 
   async ensureTodayNoticeNote() {
@@ -419,6 +993,163 @@ class ClassHomepageCore {
     if (existing) return { file: existing, path: pathValue, created: false };
     const created = await this.createOrUpdateNote(pathValue, buildNoticeTemplate(dateText), { overwrite: false, backup: false });
     return { file: created.file, path: created.path, created: created.created };
+  }
+
+  async loadJsonSummary(pathValue, sampleData, options = {}) {
+    const normalized = this.normalizePath(normalizeVaultPath(pathValue));
+    await this.ensureParentFolder(normalized);
+    const createIfMissing = options.createIfMissing !== false;
+
+    let file = this.app.vault.getAbstractFileByPath(normalized);
+    let created = false;
+    if (!file) {
+      if (!createIfMissing) {
+        return { file: null, path: normalized, data: null, created: false, missing: true };
+      }
+      file = await this.app.vault.create(normalized, `${JSON.stringify(sampleData, null, 2)}\n`);
+      created = true;
+    }
+
+    const content = await this.app.vault.read(file);
+    let data;
+    try {
+      data = JSON.parse(content);
+    } catch (error) {
+      throw new Error(`JSON parse failed for ${normalized}`);
+    }
+
+    return { file, path: normalized, data, created };
+  }
+
+  async readTextFileIfExists(pathValue) {
+    const normalized = this.normalizePath(normalizeNotePath(pathValue));
+    const file = this.app.vault.getAbstractFileByPath(normalized);
+    if (!file) return { file: null, path: normalized, content: '' };
+    return { file, path: normalized, content: await this.app.vault.read(file) };
+  }
+
+  async syncStudentGrowthHomepageSection(options = {}) {
+    const dateText = String(options.dateText || this.getToday()).trim();
+    let homepagePath = this.getHomepagePath();
+
+    if (options.ensureStructure) {
+      await this.ensureRequiredFolders();
+      const structure = await this.createInitialStructure({ overwrite: false, backup: false });
+      homepagePath = structure.homepagePath;
+    }
+
+    const homepageFile = this.app.vault.getAbstractFileByPath(homepagePath);
+    if (!homepageFile) {
+      return { homepagePath, skipped: true };
+    }
+
+    const summaryInfo = options.summaryInfo || await this.loadJsonSummary(
+      this.getStudentGrowthCheckinJsonPath(dateText),
+      buildSampleCheckinSummary(dateText),
+      { createIfMissing: Boolean(options.createSample) }
+    );
+
+    let noteResult = options.noteResult || null;
+    const notePath = this.getStudentGrowthCheckinNotePath(dateText);
+    let summaryData = summaryInfo && summaryInfo.data ? summaryInfo.data : null;
+
+    if (summaryData && !noteResult && options.refreshDerivedNote !== false) {
+      noteResult = await this.createOrUpdateNote(
+        notePath,
+        buildStudentGrowthSummaryNote(summaryData),
+        { overwrite: true, backup: false }
+      );
+    }
+
+    if (!summaryData) {
+      const noteInfo = await this.readTextFileIfExists(notePath);
+      if (noteInfo.file) {
+        summaryData = parseStudentGrowthSummaryFromNote(noteInfo.content);
+      }
+    }
+
+    const finalNotePath = noteResult && noteResult.path
+      ? noteResult.path
+      : (this.app.vault.getAbstractFileByPath(notePath) ? notePath : '');
+    const lines = summaryData
+      ? buildStudentGrowthHomepageLines(summaryData, finalNotePath)
+      : buildPendingStudentGrowthHomepageLines(finalNotePath);
+    const homepageResult = await this.upsertSection(homepagePath, '## 🌱 학생 성장 요약', lines);
+
+    return {
+      homepagePath,
+      jsonPath: summaryInfo.path,
+      notePath: finalNotePath || notePath,
+      sampleCreated: Boolean(summaryInfo.created),
+      hasData: Boolean(summaryData),
+      source: summaryInfo && summaryInfo.data ? 'json' : (finalNotePath ? 'note' : 'placeholder'),
+      homepageResult,
+    };
+  }
+
+  async syncPraiseHomepageSection(options = {}) {
+    const week = options.week || getWeekRange(this.now());
+    let homepagePath = this.getHomepagePath();
+
+    if (options.ensureStructure) {
+      await this.ensureRequiredFolders();
+      const structure = await this.createInitialStructure({ overwrite: false, backup: false });
+      homepagePath = structure.homepagePath;
+    }
+
+    const homepageFile = this.app.vault.getAbstractFileByPath(homepagePath);
+    if (!homepageFile) {
+      return { homepagePath, skipped: true };
+    }
+
+    const summaryInfo = options.summaryInfo || await this.loadJsonSummary(
+      this.getPraiseCandidatesJsonPath(week),
+      buildSamplePraiseCandidates(formatIsoWeek(this.now())),
+      { createIfMissing: Boolean(options.createSample) }
+    );
+
+    let noteResult = options.noteResult || null;
+    const notePath = this.getPraiseCandidatesNotePath(week);
+    let summaryData = summaryInfo && summaryInfo.data ? summaryInfo.data : null;
+
+    if (summaryData && !noteResult && options.refreshDerivedNote !== false) {
+      noteResult = await this.createOrUpdateNote(
+        notePath,
+        buildPraiseCandidatesNote(summaryData),
+        { overwrite: true, backup: false }
+      );
+    }
+
+    if (!summaryData) {
+      const noteInfo = await this.readTextFileIfExists(notePath);
+      if (noteInfo.file) {
+        summaryData = parsePraiseCandidatesFromNote(noteInfo.content);
+      }
+    }
+
+    const finalNotePath = noteResult && noteResult.path
+      ? noteResult.path
+      : (this.app.vault.getAbstractFileByPath(notePath) ? notePath : '');
+    const lines = summaryData
+      ? buildPraiseCandidatesHomepageLines(summaryData, finalNotePath)
+      : buildPendingPraiseHomepageLines(finalNotePath);
+    const homepageResult = await this.upsertSection(homepagePath, '## 🌟 이번 주 칭찬 후보', lines);
+
+    return {
+      homepagePath,
+      jsonPath: summaryInfo.path,
+      notePath: finalNotePath || notePath,
+      sampleCreated: Boolean(summaryInfo.created),
+      hasData: Boolean(summaryData),
+      source: summaryInfo && summaryInfo.data ? 'json' : (finalNotePath ? 'note' : 'placeholder'),
+      homepageResult,
+    };
+  }
+
+  async syncHomepageBridgeSections(options = {}) {
+    const growth = await this.syncStudentGrowthHomepageSection(options);
+    const praise = await this.syncPraiseHomepageSection(options);
+    return { growth, praise, homepagePath: growth.homepagePath || praise.homepagePath || this.getHomepagePath() };
   }
 
   async applyGoogleFormLinks() {
@@ -508,6 +1239,73 @@ class ClassHomepageCore {
     };
   }
 
+  async loadStudentGrowthSummary() {
+    const dateText = this.getToday();
+    const summaryInfo = await this.loadJsonSummary(
+      this.getStudentGrowthCheckinJsonPath(dateText),
+      buildSampleCheckinSummary(dateText)
+    );
+    const noteResult = await this.createOrUpdateNote(
+      this.getStudentGrowthCheckinNotePath(dateText),
+      buildStudentGrowthSummaryNote(summaryInfo.data),
+      { overwrite: true, backup: false }
+    );
+    const syncResult = await this.syncStudentGrowthHomepageSection({
+      ensureStructure: true,
+      createSample: true,
+      dateText,
+      summaryInfo,
+      noteResult,
+    });
+
+    await this.openFileByPath(syncResult.homepagePath);
+    return {
+      notice: summaryInfo.created
+        ? '학생 성장 요약 샘플을 생성하고 홈페이지에 반영했습니다.'
+        : '학생 성장 요약을 홈페이지에 반영했습니다.',
+      summary: {
+        jsonPath: summaryInfo.path,
+        notePath: noteResult.path,
+        sampleCreated: summaryInfo.created,
+        homepagePath: syncResult.homepagePath,
+      },
+    };
+  }
+
+  async loadPraiseCandidatesSummary() {
+    const week = getWeekRange(this.now());
+    const period = formatIsoWeek(this.now());
+    const summaryInfo = await this.loadJsonSummary(
+      this.getPraiseCandidatesJsonPath(week),
+      buildSamplePraiseCandidates(period)
+    );
+    const noteResult = await this.createOrUpdateNote(
+      this.getPraiseCandidatesNotePath(week),
+      buildPraiseCandidatesNote(summaryInfo.data),
+      { overwrite: true, backup: false }
+    );
+    const syncResult = await this.syncPraiseHomepageSection({
+      ensureStructure: true,
+      createSample: true,
+      week,
+      summaryInfo,
+      noteResult,
+    });
+
+    await this.openFileByPath(syncResult.homepagePath);
+    return {
+      notice: summaryInfo.created
+        ? '칭찬 후보 샘플을 생성하고 홈페이지에 반영했습니다.'
+        : '칭찬 후보 요약을 홈페이지에 반영했습니다.',
+      summary: {
+        jsonPath: summaryInfo.path,
+        notePath: noteResult.path,
+        sampleCreated: summaryInfo.created,
+        homepagePath: syncResult.homepagePath,
+      },
+    };
+  }
+
   async ensureFolder(pathValue) {
     const folderPath = this.normalizePath(normalizeVaultPath(pathValue));
     if (!folderPath) {
@@ -575,9 +1373,15 @@ class ClassHomepageCore {
       return { file: existing, path: normalized, created: false, overwritten: false, backupPath: '' };
     }
 
+    const current = typeof this.app.vault.read === 'function'
+      ? await this.app.vault.read(existing)
+      : '';
+    if (current === content) {
+      return { file: existing, path: normalized, created: false, overwritten: false, backupPath: '' };
+    }
+
     let backupPath = '';
     if (options.backup) {
-      const current = await this.app.vault.read(existing);
       backupPath = await this.backupFile(normalized, current, options.backupStamp || formatTimestamp(this.now()));
     }
 
@@ -590,9 +1394,12 @@ class ClassHomepageCore {
     const dateText = this.getToday();
     const homepageResult = await this.createOrUpdateNote(
       this.getHomepagePath(),
-      buildHomepageTemplate(dateText),
+      buildHomepageTemplate(dateText, this.settings.homepageUi),
       options
     );
+    await this.upsertHomepageDashboardSection(homepageResult.path, dateText);
+    await this.cleanupHomepageHeroIntro(homepageResult.path);
+    await this.syncHomepageOperationalMarkers(homepageResult.path, dateText);
     const newsTemplateResult = await this.createOrUpdateNote(
       this.getNewsTemplatePath(),
       buildNewsTemplate({ formLink: this.getNewsSubmissionUrl() }),
@@ -614,6 +1421,7 @@ class ClassHomepageCore {
 
   async openHomepage() {
     const summary = await this.createInitialStructure({ overwrite: false, backup: false });
+    await this.syncHomepageBridgeSections({ ensureStructure: false, createSample: false });
     await this.openFileByPath(summary.homepagePath);
     return {
       notice: `학급 홈페이지를 열었습니다: ${summary.homepagePath}`,
@@ -699,9 +1507,13 @@ class ClassHomepageCore {
     const dateText = this.getToday();
     const result = await this.createOrUpdateNote(
       this.getHomepagePath(),
-      buildMiricanvasHomepageTemplate(dateText),
+      buildMiricanvasHomepageTemplate(dateText, this.settings.homepageUi),
       { overwrite: true, backup: true, backupStamp: formatTimestamp(this.now()) }
     );
+    await this.upsertHomepageDashboardSection(result.path, dateText);
+    await this.cleanupHomepageHeroIntro(result.path);
+    await this.syncHomepageOperationalMarkers(result.path, dateText);
+    await this.syncHomepageBridgeSections({ ensureStructure: false, createSample: false });
     await this.openFileByPath(result.path);
     return { notice: `미리캔버스 스타일 홈페이지를 적용했습니다: ${result.path}` };
   }
@@ -742,6 +1554,8 @@ module.exports = {
   buildNoticeTemplate,
   formatDate,
   getCommandDefinitions,
+  normalizeGoogleFormSettings,
+  normalizeHomepageUiSettings,
   normalizeNotePath,
   normalizeVaultPath,
 };

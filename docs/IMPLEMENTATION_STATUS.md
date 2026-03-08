@@ -88,6 +88,7 @@ Current release baseline: `v0.2.5`
    - 난이도: **S**
    - 의존성: 없음
    - 이유: 링크 필드가 늘어난 만큼 저장/마이그레이션 회귀를 더 촘촘히 막을 필요가 있음.
+   - 진행상태(2026-03-08 15:xx KST): `tests/plugin/acceptance.test.mjs`에 Google Form 세그먼트 링크 trim/정규화와 homepage UI bounds 정규화 회귀 테스트 추가.
 
 3. **Obsidian 수동 QA 체크리스트 확장**
    - 우선순위: **P2**
