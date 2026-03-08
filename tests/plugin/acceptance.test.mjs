@@ -160,10 +160,13 @@ results.push(
 
     assert.match(homepageContent, /## 🎛 오늘의 홈 대시보드/);
     assert.match(homepageContent, /```homepage-dashboard/);
-    assert.match(homepageContent, /## 🧭 오늘 운영 루틴 \(수업 전\/중\/후\)/);
-    assert.match(homepageContent, /## 📣 학부모 소통 보드/);
+    assert.match(homepageContent, /## ✍️ 오늘 한 줄 요약/);
+    assert.match(homepageContent, /## 📣 오늘의 공지/);
+    assert.match(homepageContent, /## ✅ 오늘의 출석/);
+    assert.match(homepageContent, /## 🪙 우리반 상점/);
+    assert.match(homepageContent, /## 📘 우리반 리포트/);
+    assert.match(homepageContent, /## 🔒 교사용 학생 관계 그래프/);
     assert.match(homepageContent, /\[\[1\. 공지사항\/2026-02-28-공지\]\]/);
-    assert.match(homepageContent, /## 🧾 학부모 전달용 문구\(복사\)/);
     assert.deepEqual(workspace.openedPaths, ['홈/홈페이지.md']);
   })
 );
@@ -182,7 +185,7 @@ results.push(
       '',
       '학생 성장과 공지 흐름을 하나의 홈에서 운영합니다.',
       '',
-      '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
+      '## ✍️ 오늘 한 줄 요약',
       '- [ ] 확인',
       '',
     ].join('\n'));
@@ -216,7 +219,7 @@ results.push(
       'notice: 1. 공지사항/2026-02-28-공지.md',
       '```',
       '',
-      '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
+      '## ✍️ 오늘 한 줄 요약',
       '- [ ] 확인',
       '',
       '## 🎛 오늘의 홈 대시보드',
@@ -334,19 +337,23 @@ results.push(
     const template = buildHomepageTemplate('2026-02-28', {
       heroEmoji: '🌿',
       heroTitle: '2-1 성장 허브',
-      heroSubtitle: '학생 성장과 공지 흐름을 하나의 홈에서 운영합니다.',
+      heroSubtitle: '오늘의 공지, 출석, 우리반 상점, 리포트를 한 곳에서 정리합니다.',
       themePreset: 'forest',
       accentColor: '#2d8f5b',
     });
 
     assert.doesNotMatch(template, /2-1 성장 허브/);
-    assert.doesNotMatch(template, /학생 성장과 공지 흐름을 하나의 홈에서 운영합니다\./);
+    assert.doesNotMatch(template, /오늘의 공지, 출석, 우리반 상점, 리포트를 한 곳에서 정리합니다\./);
     assert.match(template, /theme_preset: forest/);
     assert.match(template, /accent_color: #2d8f5b/);
     assert.match(template, /```homepage-dashboard/);
+    assert.match(template, /attendance: 6\. 학생성장\/일일체크인-요약\/2026-02-28-체크인 요약\.md/);
+    assert.match(template, /classStore: 6\. 학생성장\/칭찬후보\/2026-02-23~2026-03-01-칭찬 후보\.md/);
+    assert.match(template, /classReport: 2\. 주간학습안내\/2026-02-23~2026-03-01-주간 자동 보고\.md/);
     assert.match(template, /studentGraph: 6\. 학생성장\/관계그래프\/2026-02-28-학생 관계 그래프\.json/);
     assert.match(template, /studentGraphView: 6\. 학생성장\/관계그래프\/2026-02-28-학생 관계 그래프 뷰\.md/);
-    assert.match(template, /\[\[6\. 학생성장\/칭찬후보\/2026-02-23~2026-03-01-칭찬 후보\]\]/);
+    assert.match(template, /## ✍️ 오늘 한 줄 요약/);
+    assert.match(template, /## 📘 우리반 리포트/);
   })
 );
 
@@ -442,7 +449,7 @@ results.push(
     assert.match(noteContent, /stu_writer_1: 95점/);
 
     const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
-    assert.match(homepage, /## 🌱 학생 성장 요약/);
+    assert.match(homepage, /## ✅ 오늘의 출석/);
     assert.match(homepage, /\[\[6\. 학생성장\/일일체크인-요약\/2026-02-28-체크인 요약\]\]/);
     assert.match(homepage, /지원 필요 신호: 1건/);
     assert.deepEqual(workspace.openedPaths.at(-1), '홈/홈페이지.md');
@@ -466,8 +473,8 @@ results.push(
     assert.match(noteContent, /teacher_approval_required: true/);
 
     const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
-    assert.match(homepage, /## 🌟 이번 주 칭찬 후보/);
-    const headingCount = (homepage.match(/## 🌟 이번 주 칭찬 후보/g) || []).length;
+    assert.match(homepage, /## 🪙 우리반 상점/);
+    const headingCount = (homepage.match(/## 🪙 우리반 상점/g) || []).length;
     assert.equal(headingCount, 1);
     assert.match(homepage, /\[\[6\. 학생성장\/칭찬후보\/2026-02-23~2026-03-01-칭찬 후보\]\]/);
   })
@@ -494,9 +501,6 @@ results.push(
       '| 항목 | 오늘 내용 | 확인 |',
       '| --- | --- | --- |',
       '| 공지 링크 | [[1. 공지사항/2026-02-20-공지]] | [ ] |',
-      '',
-      '## 🔔 오늘 공지',
-      '- [ ] 2026-02-20 공지 게시',
       '',
       '## 🌱 학생 성장 요약',
       '- 오늘 체크인 요약: [[6. 학생성장/일일체크인-요약/2026-02-20-체크인 요약]]',
@@ -543,13 +547,13 @@ results.push(
     const homepage = await vault.read(vault.getAbstractFileByPath('홈/홈페이지.md'));
     assert.match(homepage, /share_updated: 2026-02-28/);
     assert.match(homepage, /\| 공지 링크 \| \[\[1\. 공지사항\/2026-02-28-공지\]\] \| \[ \] \|/);
-    assert.match(homepage, /- \[ \] 2026-02-28 공지 게시/);
     assert.match(homepage, /23명 제출 \/ 1명 미제출/);
     assert.match(homepage, /stu_writer_today/);
-    assert.equal((homepage.match(/오늘 체크인 요약:/g) || []).length, 1);
-    assert.equal((homepage.match(/## 🌱 학생 성장 요약/g) || []).length, 1);
+    assert.equal((homepage.match(/출석 요약 노트:/g) || []).length, 1);
+    assert.equal((homepage.match(/## ✅ 오늘의 출석/g) || []).length, 1);
     assert.match(homepage, /stu_goal_keeper/);
-    assert.equal((homepage.match(/## 🌟 이번 주 칭찬 후보/g) || []).length, 1);
+    assert.equal((homepage.match(/## 🪙 우리반 상점/g) || []).length, 1);
+    assert.equal((homepage.match(/## ✍️ 오늘 한 줄 요약/g) || []).length, 1);
   })
 );
 
@@ -570,7 +574,7 @@ results.push(
     const manifest = JSON.parse(manifestText);
     const versions = JSON.parse(versionsText);
 
-    assert.equal(manifest.id, 'class-homepage-brat-lite');
+    assert.equal(manifest.id, 'homepage');
     assert.ok(manifest.version in versions);
     assert.equal(versions[manifest.version], manifest.minAppVersion);
     assert.match(mainText, /ClassHomepageBratLite/);

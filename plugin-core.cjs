@@ -9,7 +9,7 @@ const HOMEPAGE_BACKGROUND_MODES = Object.freeze(['none', 'embedded', 'vault', 'e
 const DEFAULT_HOMEPAGE_UI = Object.freeze({
   heroEmoji: '🏫',
   heroTitle: '우리 반 학급 홈페이지',
-  heroSubtitle: '공지, 과제, 학생 성장 흐름을 한 곳에서 정리합니다.',
+  heroSubtitle: '오늘의 공지, 출석, 우리반 상점, 리포트를 한 곳에서 정리합니다.',
   themePreset: 'sunrise',
   accentColor: '#2f6fdd',
   heroHeight: 360,
@@ -299,6 +299,20 @@ function buildSamplePraiseCandidates(period) {
   };
 }
 
+function deriveStudentGraphViewPath(graphPath, dateText) {
+  const normalized = normalizeVaultPath(
+    graphPath,
+    `6. 학생성장/관계그래프/${dateText}-학생 관계 그래프.json`
+  );
+  if (!normalized) {
+    return normalizeNotePath(`6. 학생성장/관계그래프/${dateText}-학생 관계 그래프 뷰`);
+  }
+  if (normalized.toLowerCase().endsWith('.json')) {
+    return normalizeNotePath(normalized.replace(/\.json$/i, ' 뷰.md'));
+  }
+  return normalizeNotePath(`${normalized} 뷰`);
+}
+
 function formatMaybeCount(value) {
   return typeof value === 'number' && Number.isFinite(value) ? `${value}명` : '확인 필요';
 }
@@ -377,7 +391,7 @@ function buildStudentGrowthHomepageLines(summary = {}, notePath = '') {
   const topWriters = Array.isArray(summary.topWriters) ? summary.topWriters : [];
   const supportFlags = Array.isArray(summary.supportFlags) ? summary.supportFlags : [];
   return [
-    `- 오늘 체크인 요약: ${formatNoteLink(notePath)}`,
+    `- 출석 요약 노트: ${formatNoteLink(notePath)}`,
     `- 제출 현황: ${formatMaybeCount(summary.submittedCount)} 제출 / ${formatMaybeCount(summary.missingCount)} 미제출`,
     `- 지원 필요 신호: ${supportFlags.length}건`,
     `- 우수 기록자: ${formatStudentRefs(topWriters)}`,
@@ -387,34 +401,63 @@ function buildStudentGrowthHomepageLines(summary = {}, notePath = '') {
 function buildPendingStudentGrowthHomepageLines(notePath = '') {
   return [
     notePath
-      ? `- 오늘 체크인 요약: ${formatNoteLink(notePath)}`
-      : '- 오늘 체크인 요약: 아직 연결된 요약 노트가 없습니다.',
+      ? `- 출석 요약 노트: ${formatNoteLink(notePath)}`
+      : '- 출석 요약 노트: 아직 연결된 출결 요약 노트가 없습니다.',
     '- 제출 현황: 아직 동기화되지 않음',
     '- 지원 필요 신호: 아직 동기화되지 않음',
-    '- 실행: 상단 버튼으로 샘플 생성 또는 OmniForge 요약 반영',
+    '- 실행: 상단 버튼으로 오늘의 출석을 불러오면 즉시 반영됩니다.',
   ];
 }
 
 function buildPraiseCandidatesHomepageLines(summary = {}, notePath = '') {
   const categories = summary && typeof summary.categories === 'object' ? summary.categories : {};
   return [
-    `- 후보 요약: ${formatNoteLink(notePath)}`,
-    `- 기록 성실: ${formatStudentRefs(categories.daily_writer)}`,
-    `- 목표 실천: ${formatStudentRefs(categories.goal_keeper)}`,
-    `- 질문 활동: ${formatStudentRefs(categories.question_asker)}`,
-    '- 공개 전 안내: 교사 승인 후 공개',
+    `- 상점 요약 노트: ${formatNoteLink(notePath)}`,
+    `- 기록 성실 상점: ${formatStudentRefs(categories.daily_writer)}`,
+    `- 목표 실천 상점: ${formatStudentRefs(categories.goal_keeper)}`,
+    `- 질문 활동 상점: ${formatStudentRefs(categories.question_asker)}`,
+    '- 공개 전 안내: 교사 검토 후 반영',
   ];
 }
 
 function buildPendingPraiseHomepageLines(notePath = '') {
   return [
     notePath
-      ? `- 후보 요약: ${formatNoteLink(notePath)}`
-      : '- 후보 요약: 아직 연결된 칭찬 후보 노트가 없습니다.',
-    '- 기록 성실: 아직 동기화되지 않음',
-    '- 목표 실천: 아직 동기화되지 않음',
-    '- 질문 활동: 아직 동기화되지 않음',
-    '- 공개 전 안내: 교사 승인 후 공개',
+      ? `- 상점 요약 노트: ${formatNoteLink(notePath)}`
+      : '- 상점 요약 노트: 아직 연결된 상점 요약 노트가 없습니다.',
+    '- 기록 성실 상점: 아직 동기화되지 않음',
+    '- 목표 실천 상점: 아직 동기화되지 않음',
+    '- 질문 활동 상점: 아직 동기화되지 않음',
+    '- 공개 전 안내: 교사 검토 후 반영',
+  ];
+}
+
+function buildHomepageOverviewLines({
+  dateText,
+  week,
+  growthSummary = null,
+  growthNotePath = '',
+  praiseSummary = null,
+  praiseNotePath = '',
+} = {}) {
+  const categories = praiseSummary && typeof praiseSummary.categories === 'object' ? praiseSummary.categories : {};
+  const attendanceText = growthSummary
+    ? `${formatMaybeCount(growthSummary.submittedCount)} 제출 / ${formatMaybeCount(growthSummary.missingCount)} 미제출`
+    : '아직 동기화되지 않음';
+  const storeText = praiseSummary
+    ? [
+      `기록 ${formatStudentRefs(categories.daily_writer)}`,
+      `목표 ${formatStudentRefs(categories.goal_keeper)}`,
+      `질문 ${formatStudentRefs(categories.question_asker)}`,
+    ].join(' · ')
+    : '아직 동기화되지 않음';
+  const attendanceDetail = growthNotePath ? ` · ${formatNoteLink(growthNotePath)}` : '';
+  const storeDetail = praiseNotePath ? ` · ${formatNoteLink(praiseNotePath)}` : '';
+  return [
+    `- 오늘의 공지: ${formatNoteLink(`1. 공지사항/${dateText}-공지`)}`,
+    `- 오늘의 출석: ${attendanceText}${attendanceDetail}`,
+    `- 우리반 상점: ${storeText}${storeDetail}`,
+    `- 우리반 리포트: ${formatNoteLink(`2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고`)}`,
   ];
 }
 
@@ -506,12 +549,14 @@ function buildHomepageDashboardBody(dateText) {
     '```homepage-dashboard',
     `date: ${dateText}`,
     `notice: 1. 공지사항/${dateText}-공지.md`,
-    'newsTemplate: docs/뉴스읽기-템플릿.md',
-    `weeklyReport: 2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고.md`,
+    `attendance: 6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.md`,
     `growth: 6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.md`,
+    `classStore: 6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.md`,
+    `praise: 6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.md`,
+    `classReport: 2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고.md`,
+    `weeklyReport: 2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고.md`,
     `studentGraph: 6. 학생성장/관계그래프/${dateText}-학생 관계 그래프.json`,
     `studentGraphView: 6. 학생성장/관계그래프/${dateText}-학생 관계 그래프 뷰.md`,
-    `praise: 6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보.md`,
     '```',
   ];
 }
@@ -519,6 +564,11 @@ function buildHomepageDashboardBody(dateText) {
 function buildHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE_UI) {
   const ui = normalizeHomepageUiSettings(homepageUi);
   const week = getWeekRange(new Date(`${dateText}T12:00:00`));
+  const noticePath = `1. 공지사항/${dateText}-공지`;
+  const attendancePath = `6. 학생성장/일일체크인-요약/${dateText}-체크인 요약`;
+  const classStorePath = `6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보`;
+  const classReportPath = `2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고`;
+  const graphViewPath = deriveStudentGraphViewPath(`6. 학생성장/관계그래프/${dateText}-학생 관계 그래프.json`, dateText);
   return [
     '---',
     'category: 홈',
@@ -534,78 +584,40 @@ function buildHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE_UI) {
     '## 🎛 오늘의 홈 대시보드',
     ...buildHomepageDashboardBody(dateText),
     '',
-    '## 🧭 오늘 운영 루틴 (수업 전/중/후)',
+    '## ✍️ 오늘 한 줄 요약',
+    ...buildHomepageOverviewLines({ dateText, week }),
     '',
-    '### 1) 수업 전',
-    '- [ ] 출결/결석 사유 확인',
-    '- [ ] 오늘 공지 핵심 문구 작성',
-    '- [ ] 준비물/과제 링크 점검',
+    '## 📣 오늘의 공지',
+    `- 공지 노트: ${formatNoteLink(noticePath)}`,
+    '- 오늘 공지 초안은 공지 노트에서 바로 수정합니다.',
+    '- 준비물, 일정, 전달 문구를 공지 노트에 쓰면 홈페이지 카드와 연결됩니다.',
     '',
-    '### 2) 수업 중',
-    '- [ ] 활동 안내 시 공지 링크 공유',
-    '- [ ] 이해도/지원 필요 학생 메모',
+    '## ✅ 오늘의 출석',
+    ...buildPendingStudentGrowthHomepageLines(attendancePath),
     '',
-    '### 3) 수업 후',
-    '- [ ] 오늘 공지/과제 최종 업데이트',
-    '- [ ] 학부모 확인 요청 문구 발송',
-    '- [ ] 미제출/추가 안내 대상 체크',
+    '## 🪙 우리반 상점',
+    ...buildPendingPraiseHomepageLines(classStorePath),
     '',
-    '## 📣 학부모 소통 보드',
-    '| 항목 | 오늘 내용 | 확인 |',
-    '| --- | --- | --- |',
-    '| 핵심 전달 문구 |  | [ ] |',
-    '| 준비물/일정 |  | [ ] |',
-    `| 공지 링크 | [[1. 공지사항/${dateText}-공지]] | [ ] |`,
-    '| 설문/응답 링크 |  | [ ] |',
+    '## 📘 우리반 리포트',
+    `- 이번 주 리포트: ${formatNoteLink(classReportPath)}`,
+    `- 기간: ${week.start} ~ ${week.end}`,
+    '- 상단 카드에서 우리반 리포트를 생성하면 최신 주간 노트가 연결됩니다.',
     '',
-    '## 🔔 오늘 공지',
-    `- [ ] ${dateText} 공지 게시`,
-    '- [ ] 준비물/일정 확인 안내',
-    '- [ ] 미제출/변경사항 반영',
-    '',
-    '## 📅 이번 주 학습 일정',
-    '| 요일 | 학습 주제 | 준비물 | 전달 상태 |',
-    '| --- | --- | --- | --- |',
-    '| 월 |  |  | [ ] |',
-    '| 화 |  |  | [ ] |',
-    '| 수 |  |  | [ ] |',
-    '| 목 |  |  | [ ] |',
-    '| 금 |  |  | [ ] |',
-    '',
-    '## 📝 과제 제출 링크',
-    '| 과목 | 과제 | 제출 기한 | 제출 위치(링크) |',
-    '| --- | --- | --- | --- |',
-    '| 국어 |  |  |  |',
-    '| 수학 |  |  |  |',
-    '| 사회/과학 |  |  |  |',
-    '',
-    '## 🔗 빠른 실행',
-    '- [[1. 공지사항]] 새 공지 작성',
-    '- [[2. 주간학습안내]] 이번 주 계획 확인',
-    '- [[3. 뉴스읽기]] 오늘 과제 배부',
-    '- [[5. 설문]] 제출 현황 확인',
-    '',
-    '## 🌱 학생 성장 브리지',
-    `- 오늘 체크인 요약 노트: [[6. 학생성장/일일체크인-요약/${dateText}-체크인 요약]]`,
-    `- 이번 주 칭찬 후보 노트: [[6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보]]`,
-    '- 상단 카드의 버튼으로 최신 요약을 불러오고, 교사 검토 후 공개 여부를 결정합니다.',
-    '',
-    '## 🧾 학부모 전달용 문구(복사)',
-    '- 오늘 학급 공지와 준비물 안내를 업데이트했습니다. 확인 부탁드립니다.',
-    '- 뉴스읽기 과제와 설문 링크를 함께 전달합니다.',
-    '- 문의는 클래스룸 메시지로 보내주세요.',
-    '',
-    '> [!teacher] 교사용 체크리스트',
-    '> - [ ] 오늘 공지 확인',
-    '> - [ ] 주간학습안내 업데이트',
-    '> - [ ] 뉴스읽기/설문 링크 점검',
-    '> - [ ] 결석·지각 학생 안내 처리',
+    '## 🔒 교사용 학생 관계 그래프',
+    `- 교사용 보기: ${formatNoteLink(graphViewPath)}`,
+    '- 학생 관계 그래프는 교사용 노트에서만 확인합니다.',
     '',
   ].join('\n');
 }
 
 function buildMiricanvasHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE_UI) {
   const ui = normalizeHomepageUiSettings(homepageUi);
+  const week = getWeekRange(new Date(`${dateText}T12:00:00`));
+  const noticePath = `1. 공지사항/${dateText}-공지`;
+  const attendancePath = `6. 학생성장/일일체크인-요약/${dateText}-체크인 요약`;
+  const classStorePath = `6. 학생성장/칭찬후보/${week.start}~${week.end}-칭찬 후보`;
+  const classReportPath = `2. 주간학습안내/${week.start}~${week.end}-주간 자동 보고`;
+  const graphViewPath = deriveStudentGraphViewPath(`6. 학생성장/관계그래프/${dateText}-학생 관계 그래프.json`, dateText);
   return [
     '---',
     'category: 홈',
@@ -622,49 +634,31 @@ function buildMiricanvasHomepageTemplate(dateText, homepageUi = DEFAULT_HOMEPAGE
     '## 🎛 오늘의 홈 대시보드',
     ...buildHomepageDashboardBody(dateText),
     '',
-    '## 학부모님께 드리는 말씀',
+    '## 학급 홈페이지 핵심',
+    ...buildHomepageOverviewLines({ dateText, week }),
     '',
-    '## Properties',
-    '- share_link: ',
-    `- share_updated: ${dateText}`,
-    '- priority: HIGH',
-    '- tags: 공지, 학부모, 안내',
-    '- category: 1. 공지사항',
+    '## 오늘의 공지',
+    `- 공지 노트: ${formatNoteLink(noticePath)}`,
+    '- 오늘 공지 초안과 전달 문구를 한 노트에서 관리합니다.',
     '',
     '> [!note] 배너 영역',
     '> - 미리캔버스에서 만든 배너를 첨부하세요',
     '> - 예시: ![[999-Attachments/학부모공지-배너.png]]',
     '',
-    '## 인사말',
-    '- 안녕하세요. 이번 주 학급 운영 핵심 안내를 드립니다.',
+    '## 오늘의 출석',
+    ...buildPendingStudentGrowthHomepageLines(attendancePath),
     '',
-    '## 교육 목표',
-    '1. 기본 학습 습관 형성',
-    '2. 협력적 문제 해결',
-    '3. 자기주도 학습 강화',
+    '## 우리반 상점',
+    ...buildPendingPraiseHomepageLines(classStorePath),
     '',
-    '## 이번 주 공지',
-    '- [ ] 핵심 공지 1',
-    '- [ ] 핵심 공지 2',
+    '## 우리반 리포트',
+    `- 리포트 노트: ${formatNoteLink(classReportPath)}`,
+    `- 이번 주 범위: ${week.start} ~ ${week.end}`,
+    '- 상단 카드에서 생성하면 최신 노트가 연결됩니다.',
     '',
-    '## 준비물/일정',
-    '| 항목 | 내용 | 확인 |',
-    '| --- | --- | --- |',
-    '| 준비물 |  | [ ] |',
-    '| 주요 일정 |  | [ ] |',
-    '| 제출 과제 |  | [ ] |',
-    '',
-    '## 빠른 이동',
-    '- [[1. 공지사항]]',
-    '- [[2. 주간학습안내]]',
-    '- [[3. 뉴스읽기]]',
-    '- [[4. 수업활동]]',
-    '- [[5. 설문]]',
-    '',
-    '## 학부모 확인 요청',
-    '- [ ] 공지 확인 완료',
-    '- [ ] 준비물 확인 완료',
-    '- [ ] 문의사항 전달',
+    '## 교사용 학생 관계 그래프',
+    `- 교사용 보기: ${formatNoteLink(graphViewPath)}`,
+    '- 그래프는 교사용 노트에서만 확인합니다.',
     '',
   ].join('\n');
 }
@@ -1043,6 +1037,15 @@ class ClassHomepageCore {
       return { homepagePath, skipped: true };
     }
 
+    const homepageContent = await this.app.vault.read(homepageFile);
+    const migratedContent = dedupeSectionByHeading(
+      homepageContent.replace(/## 🌱 학생 성장 요약/g, '## ✅ 오늘의 출석'),
+      '## ✅ 오늘의 출석'
+    );
+    if (migratedContent !== homepageContent) {
+      await this.app.vault.modify(homepageFile, migratedContent);
+    }
+
     const summaryInfo = options.summaryInfo || await this.loadJsonSummary(
       this.getStudentGrowthCheckinJsonPath(dateText),
       buildSampleCheckinSummary(dateText),
@@ -1074,7 +1077,7 @@ class ClassHomepageCore {
     const lines = summaryData
       ? buildStudentGrowthHomepageLines(summaryData, finalNotePath)
       : buildPendingStudentGrowthHomepageLines(finalNotePath);
-    const homepageResult = await this.upsertSection(homepagePath, '## 🌱 학생 성장 요약', lines);
+    const homepageResult = await this.upsertSection(homepagePath, '## ✅ 오늘의 출석', lines);
 
     return {
       homepagePath,
@@ -1083,6 +1086,7 @@ class ClassHomepageCore {
       sampleCreated: Boolean(summaryInfo.created),
       hasData: Boolean(summaryData),
       source: summaryInfo && summaryInfo.data ? 'json' : (finalNotePath ? 'note' : 'placeholder'),
+      summaryData,
       homepageResult,
     };
   }
@@ -1100,6 +1104,15 @@ class ClassHomepageCore {
     const homepageFile = this.app.vault.getAbstractFileByPath(homepagePath);
     if (!homepageFile) {
       return { homepagePath, skipped: true };
+    }
+
+    const homepageContent = await this.app.vault.read(homepageFile);
+    const migratedContent = dedupeSectionByHeading(
+      homepageContent.replace(/## 🌟 이번 주 칭찬 후보/g, '## 🪙 우리반 상점'),
+      '## 🪙 우리반 상점'
+    );
+    if (migratedContent !== homepageContent) {
+      await this.app.vault.modify(homepageFile, migratedContent);
     }
 
     const summaryInfo = options.summaryInfo || await this.loadJsonSummary(
@@ -1133,7 +1146,7 @@ class ClassHomepageCore {
     const lines = summaryData
       ? buildPraiseCandidatesHomepageLines(summaryData, finalNotePath)
       : buildPendingPraiseHomepageLines(finalNotePath);
-    const homepageResult = await this.upsertSection(homepagePath, '## 🌟 이번 주 칭찬 후보', lines);
+    const homepageResult = await this.upsertSection(homepagePath, '## 🪙 우리반 상점', lines);
 
     return {
       homepagePath,
@@ -1142,14 +1155,67 @@ class ClassHomepageCore {
       sampleCreated: Boolean(summaryInfo.created),
       hasData: Boolean(summaryData),
       source: summaryInfo && summaryInfo.data ? 'json' : (finalNotePath ? 'note' : 'placeholder'),
+      summaryData,
       homepageResult,
     };
+  }
+
+  async syncHomepageOverviewSection(options = {}) {
+    const dateText = String(options.dateText || this.getToday()).trim();
+    const week = options.week || getWeekRange(this.now());
+    let homepagePath = this.getHomepagePath();
+
+    if (options.ensureStructure) {
+      await this.ensureRequiredFolders();
+      const structure = await this.createInitialStructure({ overwrite: false, backup: false });
+      homepagePath = structure.homepagePath;
+    }
+
+    const homepageFile = this.app.vault.getAbstractFileByPath(homepagePath);
+    if (!homepageFile) {
+      return { homepagePath, skipped: true };
+    }
+
+    const growth = options.growth || await this.syncStudentGrowthHomepageSection({
+      dateText,
+      ensureStructure: false,
+      createSample: false,
+      refreshDerivedNote: false,
+    });
+    const praise = options.praise || await this.syncPraiseHomepageSection({
+      week,
+      ensureStructure: false,
+      createSample: false,
+      refreshDerivedNote: false,
+    });
+
+    const lines = buildHomepageOverviewLines({
+      dateText,
+      week,
+      growthSummary: growth.summaryData || null,
+      growthNotePath: growth.notePath || '',
+      praiseSummary: praise.summaryData || null,
+      praiseNotePath: praise.notePath || '',
+    });
+    const homepageResult = await this.upsertSection(homepagePath, '## ✍️ 오늘 한 줄 요약', lines);
+    return { homepagePath, homepageResult };
   }
 
   async syncHomepageBridgeSections(options = {}) {
     const growth = await this.syncStudentGrowthHomepageSection(options);
     const praise = await this.syncPraiseHomepageSection(options);
-    return { growth, praise, homepagePath: growth.homepagePath || praise.homepagePath || this.getHomepagePath() };
+    const overview = await this.syncHomepageOverviewSection({
+      ...options,
+      growth,
+      praise,
+      ensureStructure: false,
+    });
+    return {
+      growth,
+      praise,
+      overview,
+      homepagePath: growth.homepagePath || praise.homepagePath || overview.homepagePath || this.getHomepagePath(),
+    };
   }
 
   async applyGoogleFormLinks() {

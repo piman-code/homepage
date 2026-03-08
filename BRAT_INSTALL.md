@@ -1,16 +1,20 @@
 # BRAT 설치 안내
 
-현재 릴리즈: `v0.2.5`
+현재 태그: `v0.2.6`
 
 - 저장소: `https://github.com/piman-code/homepage`
-- 릴리즈: `https://github.com/piman-code/homepage/releases/tag/v0.2.5`
+- 태그 확인: `https://github.com/piman-code/homepage/tags`
 
 ## 설치
 
 1. Obsidian `Settings > Community plugins`에서 **BRAT**를 설치하고 활성화합니다.
 2. BRAT 설정에서 `Add Beta plugin`을 선택합니다.
 3. 저장소 주소 `https://github.com/piman-code/homepage`를 입력합니다.
-4. 플러그인 목록에서 **homepage** 또는 `class-homepage-brat-lite`를 활성화합니다.
+4. 플러그인 목록에서 **homepage**를 활성화합니다.
+
+주의:
+- BRAT는 `homepage` 플러그인만 설치합니다.
+- 실제 학급 운영용 clean vault와 Google Form 연동 데이터는 별도 starter pack이 필요합니다.
 
 ## 설치 직후 확인
 

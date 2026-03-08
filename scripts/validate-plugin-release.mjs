@@ -41,7 +41,7 @@ async function run() {
   const versions = JSON.parse(await readUtf8NoBom('versions.json'));
   const mainJs = requiredContent['main.js'];
 
-  assert(manifest.id === 'class-homepage-brat-lite', 'manifest.json id must be class-homepage-brat-lite');
+  assert(manifest.id === 'homepage', 'manifest.json id must be homepage');
   assert(typeof manifest.version === 'string' && manifest.version.length > 0, 'manifest.json version is missing');
   assert(typeof manifest.minAppVersion === 'string' && manifest.minAppVersion.length > 0, 'manifest.json minAppVersion is missing');
   assert(Object.prototype.hasOwnProperty.call(versions, manifest.version), `versions.json missing key ${manifest.version}`);

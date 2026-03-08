@@ -70,7 +70,7 @@ git push origin v<next-version>
 - [ ] 릴리스 자산에 `main.js` 존재
 - [ ] 릴리스 자산에 `versions.json` 존재
 - [ ] 릴리스 자산에 `styles.css` 존재
-- [ ] `manifest.json`의 `id`가 `class-homepage-brat-lite`
+- [ ] `manifest.json`의 `id`가 `homepage`
 - [ ] `versions.json[manifest.version] === manifest.minAppVersion`
 - [ ] 파일 인코딩이 UTF-8 (BOM 없음)
 - [ ] Obsidian + BRAT에서 설치 후 필수 6개 명령이 표시됨
@@ -84,13 +84,22 @@ git push origin v<next-version>
 - `deploy.yml`에서 `Setup Pages` 단계가 실패하면 저장소 Pages 설정 또는 `PAGES_TOKEN` 구성을 먼저 확인
 - 전체 검증 실패 확인이 필요하면 로컬에서 `npm run test`, `npm run check`를 추가 실행
 
-## v2 반영 체크 (2026-03-01)
+## v2.1 반영 체크 (2026-03-08)
 
 - 스펙 기준 문서: [docs/SPEC-homepage-plugin-v2.md](docs/SPEC-homepage-plugin-v2.md)
-- 홈페이지 템플릿에 아래 섹션 포함 여부 확인
-  - `오늘 운영 루틴 (수업 전/중/후)`
-  - `학부모 소통 보드`
-  - `학부모 전달용 문구(복사)`
+- 홈페이지 대시보드에 아래 구조 포함 여부 확인
+  - `오늘의 공지`
+  - `오늘의 출석`
+  - `우리반 상점`
+  - `우리반 리포트`
+  - 카드 아래 `오늘 한 줄 요약`
+- 홈페이지 노트에 아래 섹션 포함 여부 확인
+  - `## ✍️ 오늘 한 줄 요약`
+  - `## 📣 오늘의 공지`
+  - `## ✅ 오늘의 출석`
+  - `## 🪙 우리반 상점`
+  - `## 📘 우리반 리포트`
+  - `## 🔒 교사용 학생 관계 그래프`
 - 하위 호환 확인: 기존 6개 명령 ID/라벨/실행 경로 변경 없음
 - 확장 확인:
   - `폼 링크 자동 적용`
