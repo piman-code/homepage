@@ -13,6 +13,7 @@ const {
   normalizeGoogleFormSettings,
   normalizeHomepageUiSettings,
   normalizeNotePath,
+  normalizeVaultScopedPath,
   normalizeVaultPath,
 } = require('../../plugin-core.cjs');
 
@@ -20,6 +21,9 @@ class FakeVault {
   constructor() {
     this.folders = new Set();
     this.files = new Map();
+    this.adapter = {
+      basePath: '/Users/tester/Documents/ClassVault',
+    };
   }
 
   _normalize(pathValue) {
@@ -281,10 +285,31 @@ results.push(
   await runTest('path normalization handles slash and backslash', async () => {
     assert.equal(normalizeNotePath('홈\\학급\\..\\홈페이지', '홈/홈페이지.md'), '홈/홈페이지.md');
     assert.equal(normalizeNotePath('3. 뉴스읽기\\2026-02-28-뉴스읽기 과제', ''), '3. 뉴스읽기/2026-02-28-뉴스읽기 과제.md');
+    assert.equal(
+      normalizeVaultScopedPath('/Users/tester/Documents/ClassVault/홈/홈페이지.md', '홈/홈페이지.md', {
+        app: { vault: { adapter: { basePath: '/Users/tester/Documents/ClassVault' } } },
+        kind: 'note',
+      }),
+      '홈/홈페이지.md'
+    );
+    assert.equal(
+      normalizeVaultScopedPath('/Users/tester/Documents/ClassVault/3. 뉴스읽기', '3. 뉴스읽기', {
+        app: { vault: { adapter: { basePath: '/Users/tester/Documents/ClassVault' } } },
+        kind: 'folder',
+      }),
+      '3. 뉴스읽기'
+    );
 
     const { core, vault } = createCore({ homepagePath: '홈\\내반\\..\\홈페이지' });
     await commandByName(core, '학급 홈페이지 열기').run();
     assert.ok(vault.getAbstractFileByPath('홈/홈페이지.md'));
+
+    const absoluteCore = createCore({
+      homepagePath: '/Users/tester/Documents/ClassVault/홈/홈페이지.md',
+      newsFolder: '/Users/tester/Documents/ClassVault/3. 뉴스읽기',
+    }).core;
+    assert.equal(absoluteCore.getHomepagePath(), '홈/홈페이지.md');
+    assert.equal(absoluteCore.getNewsFolderPath(), '3. 뉴스읽기');
   })
 );
 
@@ -354,6 +379,23 @@ results.push(
     assert.match(template, /studentGraphView: 6\. 학생성장\/관계그래프\/2026-02-28-학생 관계 그래프 뷰\.md/);
     assert.match(template, /## ✍️ 오늘 한 줄 요약/);
     assert.match(template, /## 📘 우리반 리포트/);
+  })
+);
+
+results.push(
+  await runTest('starter kit installs beginner docs and templates into the vault', async () => {
+    const { core, vault, workspace } = createCore();
+
+    await commandByName(core, '초보자용 시작 세트 설치').run();
+
+    assert.ok(vault.getAbstractFileByPath('00. 시작하기/homepage 빠른 시작.md'));
+    assert.ok(vault.getAbstractFileByPath('Templates/homepage/학생 메모 템플릿.md'));
+    assert.ok(vault.getAbstractFileByPath('Samples/homepage/학생 메모 예시.md'));
+
+    const quickStart = await vault.read(vault.getAbstractFileByPath('00. 시작하기/homepage 빠른 시작.md'));
+    assert.match(quickStart, /\[\[Templates\/homepage\/학생 메모 템플릿\]\]/);
+    assert.match(quickStart, /\[\[00\. 시작하기\/homepage Google Apps Script 복붙 예시\]\]/);
+    assert.deepEqual(workspace.openedPaths.at(-1), '00. 시작하기/homepage 빠른 시작.md');
   })
 );
 

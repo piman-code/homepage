@@ -2,7 +2,7 @@
 
 const os = require('os');
 const path = require('path');
-const { pathToFileURL } = require('url');
+const { fileURLToPath, pathToFileURL } = require('url');
 const { Plugin, PluginSettingTab, Setting, Notice, normalizePath, setIcon, FuzzySuggestModal, TFile } = require('obsidian');
 
 const HOMEPAGE_THEME_PRESETS = Object.freeze(['sunrise', 'ocean', 'forest']);
@@ -26,11 +26,17 @@ const DEFAULT_HOMEPAGE_UI = Object.freeze({
 
 const HOMEPAGE_IMAGE_EXTENSIONS = Object.freeze(new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'avif']));
 
+const DEFAULT_ONBOARDING = Object.freeze({
+  welcomeShown: false,
+  starterKitInstalledAt: '',
+});
+
 const DEFAULT_SETTINGS = Object.freeze({
   homepagePath: '홈/홈페이지.md',
   newsFolder: '3. 뉴스읽기',
   formLink: '',
   homepageUi: DEFAULT_HOMEPAGE_UI,
+  onboarding: DEFAULT_ONBOARDING,
   googleForm: {
     newsSubmissionUrl: '',
     parentSurveyUrl: '',
@@ -76,6 +82,7 @@ function normalizeGoogleFormSettings(value = {}) {
 
 const COMMAND_SPECS = Object.freeze([
   { id: 'open-class-homepage', name: '학급 홈페이지 열기', method: 'openHomepage' },
+  { id: 'install-beginner-starter-kit', name: '초보자용 시작 세트 설치', method: 'installStarterKit' },
   { id: 'append-today-notice-section', name: '오늘 공지 섹션 추가', method: 'appendTodayNoticeSection' },
   { id: 'create-news-reading-template', name: '뉴스읽기 템플릿 생성', method: 'createNewsTemplateNote' },
   { id: 'regenerate-class-structure', name: '학급 기본 구조 재생성(백업 후 덮어쓰기)', method: 'regenerateStructureWithBackup' },
@@ -158,6 +165,10 @@ function normalizeSlashes(value) {
   return String(value ?? '').replace(/\\/g, '/');
 }
 
+function trimWrappedValue(value) {
+  return String(value ?? '').trim().replace(/^["']|["']$/g, '');
+}
+
 function normalizeVaultPath(value, fallback = '') {
   const source = normalizeSlashes((value || fallback || '').trim());
   const segments = [];
@@ -179,11 +190,106 @@ function normalizeNotePath(value, fallback = '') {
 }
 
 function normalizeExternalImagePath(value, fallback = '') {
-  const raw = String(value || fallback || '').trim().replace(/^["']|["']$/g, '');
+  const raw = trimWrappedValue(value || fallback || '');
   if (!raw) return '';
   if (/^(?:https?|file):\/\//i.test(raw)) return raw;
   if (raw.startsWith('~/')) return path.join(os.homedir(), raw.slice(2));
   return raw;
+}
+
+function normalizeFilesystemPath(value) {
+  let raw = trimWrappedValue(value);
+  if (!raw) return '';
+  if (/^file:\/\//i.test(raw)) {
+    try {
+      raw = fileURLToPath(raw);
+    } catch (error) {
+      return normalizeSlashes(raw);
+    }
+  }
+  return normalizeSlashes(raw).replace(/\/+$/g, '');
+}
+
+function isAbsoluteFilesystemPath(value) {
+  const normalized = normalizeFilesystemPath(value);
+  return normalized.startsWith('/')
+    || /^[a-zA-Z]:\//.test(normalized)
+    || normalized.startsWith('//');
+}
+
+function shouldUseCaseInsensitivePaths(pathValue) {
+  return /^[a-zA-Z]:\//.test(pathValue) || pathValue.startsWith('//');
+}
+
+function getVaultBasePath(app) {
+  const adapter = app && app.vault ? app.vault.adapter : null;
+  const basePath = adapter && typeof adapter.basePath === 'string' ? adapter.basePath : '';
+  return normalizeFilesystemPath(basePath);
+}
+
+function relativizeToVaultRoot(value, app) {
+  const absolutePath = normalizeFilesystemPath(value);
+  const basePath = getVaultBasePath(app);
+  if (!absolutePath || !basePath) return '';
+
+  const compare = shouldUseCaseInsensitivePaths(basePath)
+    ? (input) => input.toLowerCase()
+    : (input) => input;
+  const absoluteCompare = compare(absolutePath);
+  const baseCompare = compare(basePath);
+
+  if (absoluteCompare === baseCompare) return '';
+  if (!absoluteCompare.startsWith(`${baseCompare}/`)) return '';
+  return absolutePath.slice(basePath.length + 1);
+}
+
+function normalizeVaultScopedPath(value, fallback = '', options = {}) {
+  const kind = options.kind || 'file';
+  const sourceFallback = String(fallback || '').trim();
+  const raw = trimWrappedValue(value || sourceFallback);
+  let candidate = raw;
+
+  if (isAbsoluteFilesystemPath(raw)) {
+    candidate = relativizeToVaultRoot(raw, options.app);
+  }
+
+  if (kind === 'note') {
+    return normalizeNotePath(candidate, sourceFallback);
+  }
+  return normalizeVaultPath(candidate, sourceFallback);
+}
+
+function normalizeOnboardingSettings(value = {}) {
+  return {
+    welcomeShown: normalizeBooleanSetting(value.welcomeShown, DEFAULT_ONBOARDING.welcomeShown),
+    starterKitInstalledAt: String(value.starterKitInstalledAt || '').trim(),
+  };
+}
+
+function sanitizeSettingsForCurrentVault(settings = {}, app = null) {
+  const next = Object.assign({}, settings);
+  const migratedFields = [];
+
+  const homepagePath = normalizeVaultScopedPath(next.homepagePath, DEFAULT_PATHS.homepage, { app, kind: 'note' });
+  if (homepagePath !== String(next.homepagePath || '')) {
+    migratedFields.push('homepagePath');
+  }
+  next.homepagePath = homepagePath;
+
+  const newsFolder = normalizeVaultScopedPath(next.newsFolder, DEFAULT_SETTINGS.newsFolder, { app, kind: 'folder' });
+  if (newsFolder !== String(next.newsFolder || '')) {
+    migratedFields.push('newsFolder');
+  }
+  next.newsFolder = newsFolder;
+
+  const homepageUi = normalizeHomepageUiSettings(next.homepageUi || DEFAULT_HOMEPAGE_UI);
+  const backgroundImagePath = normalizeVaultScopedPath(homepageUi.backgroundImagePath, '', { app, kind: 'file' });
+  if (backgroundImagePath !== String(homepageUi.backgroundImagePath || '')) {
+    migratedFields.push('homepageUi.backgroundImagePath');
+  }
+  next.homepageUi = normalizeHomepageUiSettings(Object.assign({}, homepageUi, { backgroundImagePath }));
+
+  return { settings: next, migratedFields };
 }
 
 function resolveHomepageBackgroundMode(modeValue, vaultPath, externalPath, dataUrl) {
@@ -1212,6 +1318,286 @@ function buildNewsTemplate(options = {}) {
   ].join('\n');
 }
 
+const STARTER_KIT_FOLDERS = Object.freeze([
+  '00. 시작하기',
+  '7. 상담기록',
+  '8. 과제관리',
+  '9. 수업자료',
+  '10. 활동기록',
+  'Templates',
+  'Templates/homepage',
+  'Samples',
+  'Samples/homepage',
+]);
+
+function buildStarterQuickStartNote() {
+  return [
+    '# homepage 빠른 시작',
+    '',
+    '이 노트는 Obsidian 안에서 바로 따라 하기 위한 초보자용 시작 문서입니다.',
+    '',
+    '## 1단계. 바로 눌러 보기',
+    '- `학급 홈페이지 열기`',
+    '- `오늘자 공지 노트 생성`',
+    '- `오늘자 뉴스읽기 과제 생성`',
+    '',
+    '## 2단계. 같이 열어 둘 폴더',
+    '- [[홈/홈페이지]]',
+    '- [[1. 공지사항]]',
+    '- [[3. 뉴스읽기]]',
+    '- [[Templates/homepage]]',
+    '- [[Samples/homepage]]',
+    '',
+    '## 3단계. 바로 복붙할 템플릿',
+    '- [[Templates/homepage/학생 메모 템플릿]]',
+    '- [[Templates/homepage/상담 기록 템플릿]]',
+    '- [[Templates/homepage/수업 준비 템플릿]]',
+    '- [[Templates/homepage/과제 관리 템플릿]]',
+    '',
+    '## 4단계. 먼저 보고 따라할 예시',
+    '- [[Samples/homepage/학생 메모 예시]]',
+    '- [[Samples/homepage/상담 기록 예시]]',
+    '- [[Samples/homepage/수업 활동 기록 예시]]',
+    '- [[00. 시작하기/homepage 주간 운영 예시]]',
+    '',
+    '## 5단계. Google Apps Script 예시',
+    '- [[00. 시작하기/homepage Google Apps Script 복붙 예시]]',
+    '',
+  ].join('\n');
+}
+
+function buildStarterWeeklyWorkflowNote() {
+  return [
+    '# homepage 주간 운영 예시',
+    '',
+    '## 월요일',
+    '- 홈페이지 열기',
+    '- 주간 자동 보고서 생성',
+    '- 이번 주 공지 초안 정리',
+    '',
+    '## 화요일',
+    '- 학생 메모 템플릿으로 관찰 기록',
+    '- 필요 학생 상담 메모 추가',
+    '',
+    '## 수요일',
+    '- 수업 준비 템플릿으로 다음 차시 정리',
+    '- 뉴스읽기 과제 배포',
+    '',
+    '## 목요일',
+    '- 과제 제출 점검',
+    '- 활동 기록 정리',
+    '',
+    '## 금요일',
+    '- 주간 자동 보고서 다시 생성',
+    '- 다음 주에 이어볼 학생 메모만 남기기',
+    '',
+  ].join('\n');
+}
+
+function buildStarterAppsScriptNote() {
+  return [
+    '# homepage Google Apps Script 복붙 예시',
+    '',
+    '아래 코드는 Google 스프레드시트에서 `확장 프로그램 -> Apps Script`를 눌러 그대로 붙여 넣을 수 있는 예시입니다.',
+    '',
+    '```javascript',
+    'function onOpen() {',
+    '  SpreadsheetApp.getUi()',
+    '    .createMenu("학급도우미")',
+    '    .addItem("오늘 출석 시트 만들기", "createTodayAttendanceSheet")',
+    '    .addToUi();',
+    '}',
+    '',
+    'function createTodayAttendanceSheet() {',
+    '  const ss = SpreadsheetApp.getActiveSpreadsheet();',
+    '  const tz = Session.getScriptTimeZone() || "Asia/Seoul";',
+    '  const today = Utilities.formatDate(new Date(), tz, "yyyy-MM-dd");',
+    '  let sheet = ss.getSheetByName(today);',
+    '',
+    '  if (!sheet) {',
+    '    sheet = ss.insertSheet(today);',
+    '    sheet.getRange(1, 1, 1, 4).setValues([["번호", "이름", "출결", "메모"]]);',
+    '    sheet.setFrozenRows(1);',
+    '    sheet.autoResizeColumns(1, 4);',
+    '  }',
+    '',
+    '  SpreadsheetApp.getUi().alert(today + " 시트를 준비했습니다.");',
+    '}',
+    '```',
+    '',
+    '## 실행 순서',
+    '- 1. 스프레드시트를 새로 만듭니다.',
+    '- 2. `확장 프로그램 -> Apps Script`를 누릅니다.',
+    '- 3. 기존 코드를 지우고 위 코드를 붙여 넣습니다.',
+    '- 4. 저장 후 함수를 한 번 실행합니다.',
+    '- 5. 권한 허용 창이 나오면 허용합니다.',
+    '',
+  ].join('\n');
+}
+
+function buildStudentMemoTemplate() {
+  return [
+    '# 학생 메모 템플릿',
+    '',
+    '## 기본 정보',
+    '- 날짜:',
+    '- 학생:',
+    '- 상황:',
+    '',
+    '## 오늘 관찰',
+    '- 수업 참여:',
+    '- 과제 상태:',
+    '- 친구 관계:',
+    '',
+    '## 다음 행동',
+    '- 내일 확인할 것:',
+    '- 보호자 연락 필요 여부:',
+    '',
+  ].join('\n');
+}
+
+function buildCounselingTemplate() {
+  return [
+    '# 상담 기록 템플릿',
+    '',
+    '## 상담 정보',
+    '- 날짜:',
+    '- 학생:',
+    '- 상담 유형: 생활 / 학습 / 관계 / 보호자',
+    '',
+    '## 들은 내용',
+    '- ',
+    '',
+    '## 교사 판단',
+    '- 바로 도와줄 것:',
+    '- 추후 확인할 것:',
+    '',
+    '## 후속 조치',
+    '- [ ] 다음 상담 일정 잡기',
+    '- [ ] 보호자 연락',
+    '- [ ] 관련 교과 선생님과 공유',
+    '',
+  ].join('\n');
+}
+
+function buildLessonPrepTemplate() {
+  return [
+    '# 수업 준비 템플릿',
+    '',
+    '## 수업 기본 정보',
+    '- 날짜:',
+    '- 교과:',
+    '- 차시:',
+    '',
+    '## 오늘 목표',
+    '- ',
+    '',
+    '## 준비물',
+    '- ',
+    '',
+    '## 진행 순서',
+    '- 도입:',
+    '- 활동:',
+    '- 정리:',
+    '',
+  ].join('\n');
+}
+
+function buildAssignmentTemplate() {
+  return [
+    '# 과제 관리 템플릿',
+    '',
+    '## 과제 정보',
+    '- 과제명:',
+    '- 마감일:',
+    '- 제출 방법:',
+    '',
+    '## 제출 점검',
+    '- 제출 완료:',
+    '- 미제출:',
+    '- 재안내 필요:',
+    '',
+    '## 메모',
+    '- ',
+    '',
+  ].join('\n');
+}
+
+function buildStudentMemoSample() {
+  return [
+    '# 학생 메모 예시',
+    '',
+    '## 기본 정보',
+    '- 날짜: 2026-03-09',
+    '- 학생: 김예시',
+    '- 상황: 아침 자습 시간',
+    '',
+    '## 오늘 관찰',
+    '- 수업 참여: 시작은 느렸지만 발표 때는 적극적으로 참여함',
+    '- 과제 상태: 과학 과제 미제출, 이유를 설명함',
+    '- 친구 관계: 같은 모둠 친구를 잘 도와줌',
+    '',
+    '## 다음 행동',
+    '- 내일 확인할 것: 과학 과제 제출 여부',
+    '- 보호자 연락 필요 여부: 오늘은 보류',
+    '',
+  ].join('\n');
+}
+
+function buildCounselingSample() {
+  return [
+    '# 상담 기록 예시',
+    '',
+    '## 상담 정보',
+    '- 날짜: 2026-03-09',
+    '- 학생: 박예시',
+    '- 상담 유형: 학습',
+    '',
+    '## 들은 내용',
+    '- 수학 분수 단원이 어렵고, 숙제를 어디서부터 해야 할지 모르겠다고 말함',
+    '',
+    '## 교사 판단',
+    '- 바로 도와줄 것: 문제 1번을 함께 시작해 주기',
+    '- 추후 확인할 것: 금요일까지 비슷한 문제를 스스로 푸는지 확인',
+    '',
+  ].join('\n');
+}
+
+function buildActivitySample() {
+  return [
+    '# 수업 활동 기록 예시',
+    '',
+    '## 수업 정보',
+    '- 날짜: 2026-03-09',
+    '- 교과: 사회',
+    '- 활동: 모둠 토의',
+    '',
+    '## 잘 된 점',
+    '- 1모둠은 역할 분담이 빨랐고 자료 정리가 깔끔했음',
+    '- 3모둠은 질문이 많아 전체 이해를 끌어올림',
+    '',
+    '## 다음 시간 보완',
+    '- 발언이 적었던 학생에게 짧은 역할 먼저 주기',
+    '- 활동지 예시를 한 장 더 보여 주기',
+    '',
+  ].join('\n');
+}
+
+function buildStarterKitEntries() {
+  return [
+    { path: '00. 시작하기/homepage 빠른 시작.md', content: buildStarterQuickStartNote() },
+    { path: '00. 시작하기/homepage 주간 운영 예시.md', content: buildStarterWeeklyWorkflowNote() },
+    { path: '00. 시작하기/homepage Google Apps Script 복붙 예시.md', content: buildStarterAppsScriptNote() },
+    { path: 'Templates/homepage/학생 메모 템플릿.md', content: buildStudentMemoTemplate() },
+    { path: 'Templates/homepage/상담 기록 템플릿.md', content: buildCounselingTemplate() },
+    { path: 'Templates/homepage/수업 준비 템플릿.md', content: buildLessonPrepTemplate() },
+    { path: 'Templates/homepage/과제 관리 템플릿.md', content: buildAssignmentTemplate() },
+    { path: 'Samples/homepage/학생 메모 예시.md', content: buildStudentMemoSample() },
+    { path: 'Samples/homepage/상담 기록 예시.md', content: buildCounselingSample() },
+    { path: 'Samples/homepage/수업 활동 기록 예시.md', content: buildActivitySample() },
+  ];
+}
+
 class ClassHomepageCore {
   constructor(context) {
     this.app = context.app;
@@ -1221,8 +1607,16 @@ class ClassHomepageCore {
   }
 
   getToday() { return formatDate(this.now()); }
-  getHomepagePath() { return this.normalizePath(normalizeNotePath(this.settings.homepagePath, DEFAULT_PATHS.homepage)); }
-  getNewsFolderPath() { return this.normalizePath(normalizeVaultPath(this.settings.newsFolder, DEFAULT_SETTINGS.newsFolder)); }
+  getHomepagePath() {
+    return this.normalizePath(
+      normalizeVaultScopedPath(this.settings.homepagePath, DEFAULT_PATHS.homepage, { app: this.app, kind: 'note' })
+    );
+  }
+  getNewsFolderPath() {
+    return this.normalizePath(
+      normalizeVaultScopedPath(this.settings.newsFolder, DEFAULT_SETTINGS.newsFolder, { app: this.app, kind: 'folder' })
+    );
+  }
   getNewsTemplatePath() { return this.normalizePath(normalizeNotePath(DEFAULT_PATHS.newsTemplate, DEFAULT_PATHS.newsTemplate)); }
   getStudentGrowthCheckinJsonPath(dateText) { return this.normalizePath(normalizeVaultPath(`6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.json`)); }
   getStudentGrowthCheckinNotePath(dateText) { return this.normalizePath(normalizeNotePath(`6. 학생성장/일일체크인-요약/${dateText}-체크인 요약.md`)); }
@@ -1766,6 +2160,12 @@ class ClassHomepageCore {
     return created;
   }
 
+  async ensureStarterKitFolders() {
+    let created = 0;
+    for (const folder of STARTER_KIT_FOLDERS) if (await this.ensureFolder(folder)) created += 1;
+    return created;
+  }
+
   async openFileByPath(pathValue) {
     const normalized = this.normalizePath(pathValue);
     const file = this.app.vault.getAbstractFileByPath(normalized);
@@ -1828,6 +2228,28 @@ class ClassHomepageCore {
     await this.syncHomepageBridgeSections({ ensureStructure: false, createSample: false });
     await this.openFileByPath(summary.homepagePath);
     return { notice: `학급 홈페이지를 열었습니다: ${summary.homepagePath}`, summary };
+  }
+
+  async installStarterKit() {
+    await this.createInitialStructure({ overwrite: false, backup: false });
+    const starterFolderCreated = await this.ensureStarterKitFolders();
+    const entries = buildStarterKitEntries();
+    const results = [];
+    for (const entry of entries) {
+      results.push(await this.createOrUpdateNote(entry.path, entry.content, { overwrite: false, backup: false }));
+    }
+    const createdFiles = results.filter((item) => item.created).length;
+    const openedPath = normalizeNotePath('00. 시작하기/homepage 빠른 시작');
+    await this.openFileByPath(openedPath);
+    return {
+      notice: `초보자용 시작 세트를 설치했습니다. 폴더 ${starterFolderCreated}개, 파일 ${createdFiles}개를 추가했습니다.`,
+      summary: {
+        starterFolderCreated,
+        createdFiles,
+        openedPath,
+        touchedPaths: results.map((item) => item.path),
+      },
+    };
   }
 
   async appendTodayNoticeSection() {
@@ -1953,6 +2375,11 @@ module.exports = class ClassHomepageBratLite extends Plugin {
     this.addSettingTab(new ClassHomepageSettingTab(this.app, this));
     this.registerHomepageBridgeSyncEvents();
     void this.syncHomepageBridgeState();
+    if (this.settingsMeta && this.settingsMeta.migratedFields.length > 0) {
+      await this.saveSettings();
+      new Notice(`다른 계정/절대경로에서 넘어온 설정 ${this.settingsMeta.migratedFields.length}개를 현재 vault 기준으로 정리했습니다.`, 12000);
+    }
+    void this.maybeShowOnboardingNotice();
   }
 
   rebuildCore() {
@@ -1962,6 +2389,13 @@ module.exports = class ClassHomepageBratLite extends Plugin {
   async executeCommand(command) {
     try {
       const result = await command.run();
+      if (command.id === 'install-beginner-starter-kit') {
+        this.settings.onboarding = normalizeOnboardingSettings({
+          ...(this.settings.onboarding || {}),
+          starterKitInstalledAt: this.core.getToday(),
+        });
+        await this.saveSettings();
+      }
       if (result && result.notice) new Notice(result.notice);
       return result;
     } catch (error) {
@@ -2679,15 +3113,36 @@ module.exports = class ClassHomepageBratLite extends Plugin {
     const loaded = (await this.loadData()) || {};
     const merged = Object.assign({}, DEFAULT_SETTINGS, loaded);
     merged.homepageUi = normalizeHomepageUiSettings(loaded.homepageUi || DEFAULT_SETTINGS.homepageUi);
+    merged.onboarding = normalizeOnboardingSettings(loaded.onboarding || DEFAULT_SETTINGS.onboarding);
     merged.googleForm = normalizeGoogleFormSettings(loaded.googleForm || DEFAULT_SETTINGS.googleForm);
     if (!merged.googleForm.newsSubmissionUrl && merged.formLink) {
       merged.googleForm.newsSubmissionUrl = String(merged.formLink).trim();
     }
-    this.settings = merged;
+    const sanitized = sanitizeSettingsForCurrentVault(merged, this.app);
+    this.settingsMeta = {
+      migratedFields: sanitized.migratedFields,
+      isFirstRun: Object.keys(loaded).length === 0,
+    };
+    this.settings = sanitized.settings;
   }
 
   async saveSettings() {
     await this.saveData(this.settings);
+  }
+
+  async maybeShowOnboardingNotice() {
+    const onboarding = normalizeOnboardingSettings(this.settings.onboarding || DEFAULT_ONBOARDING);
+    if (onboarding.welcomeShown) {
+      return;
+    }
+    const homepageFile = this.app.vault.getAbstractFileByPath(this.core.getHomepagePath());
+    if (homepageFile) {
+      return;
+    }
+    onboarding.welcomeShown = true;
+    this.settings.onboarding = onboarding;
+    await this.saveSettings();
+    new Notice('homepage 시작: Settings > homepage > 빠른 시작에서 1단계 기본 구조 만들기, 2단계 초보자용 시작 세트 설치를 눌러 시작하세요.', 15000);
   }
 
   requestHomepageRefresh() {
@@ -2782,24 +3237,69 @@ class ClassHomepageSettingTab extends PluginSettingTab {
     containerEl.empty();
     containerEl.createEl('h2', { text: 'homepage 설정' });
 
+    const saveAndRefresh = async () => {
+      await this.plugin.saveSettings();
+      this.plugin.rebuildCore();
+      this.plugin.requestHomepageRefresh();
+    };
+
+    const normalizePathFieldValue = (value, fallback, kind, label) => {
+      const normalized = normalizeVaultScopedPath(value, fallback, { app: this.app, kind });
+      const raw = String(value || '').trim();
+      if (raw && normalized !== raw) {
+        new Notice(`${label}에 붙여 넣은 절대경로를 현재 vault 기준 경로로 바꿨습니다.`);
+      }
+      return normalized;
+    };
+
+    containerEl.createEl('h3', { text: '빠른 시작' });
+    containerEl.createEl('p', {
+      text: '처음이라면 아래 순서대로 눌러 보세요. 새 macOS 사용자 계정에서도 이 흐름만 따라가면 시작할 수 있게 구성합니다.',
+    });
+
+    new Setting(containerEl)
+      .setName('1단계. 기본 구조 만들기')
+      .setDesc('홈페이지, 공지, 뉴스읽기 기본 폴더와 핵심 파일을 준비합니다.')
+      .addButton((button) => button.setButtonText('기본 구조 만들기').setCta().onClick(async () => {
+        await this.plugin.ensureInitialStructureSafe();
+      }));
+
+    new Setting(containerEl)
+      .setName('2단계. 초보자용 시작 세트 설치')
+      .setDesc('시작 안내, 템플릿, 샘플 노트를 vault 안에 넣습니다.')
+      .addButton((button) => button.setButtonText('시작 세트 설치').setCta().onClick(async () => {
+        await this.plugin.executeCommandById('install-beginner-starter-kit');
+      }));
+
+    new Setting(containerEl)
+      .setName('3단계. 학급 홈페이지 열기')
+      .setDesc('준비된 홈페이지를 바로 열고 오늘 흐름을 시작합니다.')
+      .addButton((button) => button.setButtonText('학급 홈페이지 열기').onClick(async () => {
+        await this.plugin.executeCommandById('open-class-homepage');
+      }));
+
     new Setting(containerEl)
       .setName('홈페이지 노트 경로')
-      .setDesc('예: 홈/홈페이지.md (슬래시/백슬래시 모두 허용)')
+      .setDesc('예: 홈/홈페이지.md (슬래시/백슬래시 모두 허용, Finder 절대경로를 붙여 넣어도 현재 vault 기준으로 자동 정리)')
       .addText((text) => text.setPlaceholder('홈/홈페이지.md').setValue(this.plugin.settings.homepagePath).onChange(async (value) => {
-        this.plugin.settings.homepagePath = value.trim();
-        await this.plugin.saveSettings();
-        this.plugin.rebuildCore();
-        this.plugin.requestHomepageRefresh();
+        const normalized = normalizePathFieldValue(value, DEFAULT_PATHS.homepage, 'note', '홈페이지 노트 경로');
+        this.plugin.settings.homepagePath = normalized;
+        if (text.getValue() !== normalized) {
+          text.setValue(normalized);
+        }
+        await saveAndRefresh();
       }));
 
     new Setting(containerEl)
       .setName('뉴스읽기 폴더')
-      .setDesc('예: 3. 뉴스읽기')
+      .setDesc('예: 3. 뉴스읽기 (Finder 절대경로를 붙여 넣어도 현재 vault 기준으로 자동 정리)')
       .addText((text) => text.setPlaceholder('3. 뉴스읽기').setValue(this.plugin.settings.newsFolder).onChange(async (value) => {
-        this.plugin.settings.newsFolder = value.trim();
-        await this.plugin.saveSettings();
-        this.plugin.rebuildCore();
-        this.plugin.requestHomepageRefresh();
+        const normalized = normalizePathFieldValue(value, DEFAULT_SETTINGS.newsFolder, 'folder', '뉴스읽기 폴더');
+        this.plugin.settings.newsFolder = normalized;
+        if (text.getValue() !== normalized) {
+          text.setValue(normalized);
+        }
+        await saveAndRefresh();
       }));
 
     containerEl.createEl('h3', { text: '홈페이지 커스터마이징' });
