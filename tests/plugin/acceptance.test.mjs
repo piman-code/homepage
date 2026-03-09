@@ -389,11 +389,11 @@ results.push(
     await commandByName(core, '초보자용 시작 세트 설치').run();
 
     assert.ok(vault.getAbstractFileByPath('00. 시작하기/homepage 빠른 시작.md'));
-    assert.ok(vault.getAbstractFileByPath('Templates/homepage/학생 메모 템플릿.md'));
-    assert.ok(vault.getAbstractFileByPath('Samples/homepage/학생 메모 예시.md'));
+    assert.ok(vault.getAbstractFileByPath('템플릿/homepage/학생 메모 템플릿.md'));
+    assert.ok(vault.getAbstractFileByPath('예시/homepage/학생 메모 예시.md'));
 
     const quickStart = await vault.read(vault.getAbstractFileByPath('00. 시작하기/homepage 빠른 시작.md'));
-    assert.match(quickStart, /\[\[Templates\/homepage\/학생 메모 템플릿\]\]/);
+    assert.match(quickStart, /\[\[템플릿\/homepage\/학생 메모 템플릿\]\]/);
     assert.match(quickStart, /\[\[00\. 시작하기\/homepage Google Apps Script 복붙 예시\]\]/);
     assert.deepEqual(workspace.openedPaths.at(-1), '00. 시작하기/homepage 빠른 시작.md');
   })

@@ -18,8 +18,8 @@ starter kit을 설치하면 기본적으로 아래 흐름을 쓰면 됩니다.
 8. 과제관리/
 9. 수업자료/
 10. 활동기록/
-Templates/homepage/
-Samples/homepage/
+템플릿/homepage/
+예시/homepage/
 00. 시작하기/
 ```
 
@@ -33,13 +33,13 @@ Samples/homepage/
 - 과제 점검: `8. 과제관리/`
 - 수업 준비: `9. 수업자료/`
 - 활동 직후 기록: `10. 활동기록/`
-- 복붙 원본 템플릿: `Templates/homepage/`
+- 복붙 원본 템플릿: `템플릿/homepage/`
 
 ## 3단계. 템플릿 복붙 방법
 
 플러그인 없이 하는 가장 쉬운 방법:
 
-1. `Templates/homepage/학생 메모 템플릿.md`를 엽니다.
+1. `템플릿/homepage/학생 메모 템플릿.md`를 엽니다.
 2. 전체 복사합니다.
 3. 새 노트를 만듭니다.
 4. 붙여 넣습니다.

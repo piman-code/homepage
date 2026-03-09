@@ -86,14 +86,14 @@ https://github.com/piman-code/homepage
 `시작 세트 설치`를 누르면 아래 파일이 vault 안에 생깁니다.
 
 - `00. 시작하기/homepage 빠른 시작.md`
-- `Templates/homepage/*.md`
-- `Samples/homepage/*.md`
+- `템플릿/homepage/*.md`
+- `예시/homepage/*.md`
 
 가장 먼저 볼 파일:
 
 1. `00. 시작하기/homepage 빠른 시작.md`
-2. `Samples/homepage/학생 메모 예시.md`
-3. `Samples/homepage/상담 기록 예시.md`
+2. `예시/homepage/학생 메모 예시.md`
+3. `예시/homepage/상담 기록 예시.md`
 
 ## 8단계. Google Form이 아직 없어도 괜찮습니다
 
@@ -115,7 +115,7 @@ Google Form URL은 나중에 넣어도 됩니다.
 
 수업 중 할 일:
 
-1. `Templates/homepage/학생 메모 템플릿.md`를 복사합니다.
+1. `템플릿/homepage/학생 메모 템플릿.md`를 복사합니다.
 2. 오늘 눈에 띈 학생 1~2명만 짧게 기록합니다.
 
 하교 전 할 일:

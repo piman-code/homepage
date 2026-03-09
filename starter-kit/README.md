@@ -7,13 +7,13 @@
 - `00. 시작하기/homepage 빠른 시작.md`
 - `00. 시작하기/homepage 주간 운영 예시.md`
 - `00. 시작하기/homepage Google Apps Script 복붙 예시.md`
-- `Templates/homepage/학생 메모 템플릿.md`
-- `Templates/homepage/상담 기록 템플릿.md`
-- `Templates/homepage/수업 준비 템플릿.md`
-- `Templates/homepage/과제 관리 템플릿.md`
-- `Samples/homepage/학생 메모 예시.md`
-- `Samples/homepage/상담 기록 예시.md`
-- `Samples/homepage/수업 활동 기록 예시.md`
+- `템플릿/homepage/학생 메모 템플릿.md`
+- `템플릿/homepage/상담 기록 템플릿.md`
+- `템플릿/homepage/수업 준비 템플릿.md`
+- `템플릿/homepage/과제 관리 템플릿.md`
+- `예시/homepage/학생 메모 예시.md`
+- `예시/homepage/상담 기록 예시.md`
+- `예시/homepage/수업 활동 기록 예시.md`
 
 추천 시작 순서:
 

@@ -1,6 +1,6 @@
 # BRAT 설치 안내
 
-현재 태그: `v0.2.7`
+현재 태그: `v0.2.8`
 
 - 저장소: `https://github.com/piman-code/homepage`
 - 태그 확인: `https://github.com/piman-code/homepage/tags`
@@ -42,6 +42,6 @@
 7. `오늘자 뉴스읽기 과제 생성`
 8. 링크를 여러 노트에 반영하려면 `폼 링크 자동 적용`
 
-설치 후 starter kit을 넣으면 `00. 시작하기`, `Templates/homepage`, `Samples/homepage`가 함께 생성됩니다.
+설치 후 starter kit을 넣으면 `00. 시작하기`, `템플릿/homepage`, `예시/homepage`가 함께 생성됩니다.
 
 문제가 있으면 [TROUBLESHOOTING.md](TROUBLESHOOTING.md)를 확인하세요.

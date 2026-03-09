@@ -1324,10 +1324,10 @@ const STARTER_KIT_FOLDERS = Object.freeze([
   '8. 과제관리',
   '9. 수업자료',
   '10. 활동기록',
-  'Templates',
-  'Templates/homepage',
-  'Samples',
-  'Samples/homepage',
+  '템플릿',
+  '템플릿/homepage',
+  '예시',
+  '예시/homepage',
 ]);
 
 function buildStarterQuickStartNote() {
@@ -1345,19 +1345,19 @@ function buildStarterQuickStartNote() {
     '- [[홈/홈페이지]]',
     '- [[1. 공지사항]]',
     '- [[3. 뉴스읽기]]',
-    '- [[Templates/homepage]]',
-    '- [[Samples/homepage]]',
+    '- [[템플릿/homepage]]',
+    '- [[예시/homepage]]',
     '',
     '## 3단계. 바로 복붙할 템플릿',
-    '- [[Templates/homepage/학생 메모 템플릿]]',
-    '- [[Templates/homepage/상담 기록 템플릿]]',
-    '- [[Templates/homepage/수업 준비 템플릿]]',
-    '- [[Templates/homepage/과제 관리 템플릿]]',
+    '- [[템플릿/homepage/학생 메모 템플릿]]',
+    '- [[템플릿/homepage/상담 기록 템플릿]]',
+    '- [[템플릿/homepage/수업 준비 템플릿]]',
+    '- [[템플릿/homepage/과제 관리 템플릿]]',
     '',
     '## 4단계. 먼저 보고 따라할 예시',
-    '- [[Samples/homepage/학생 메모 예시]]',
-    '- [[Samples/homepage/상담 기록 예시]]',
-    '- [[Samples/homepage/수업 활동 기록 예시]]',
+    '- [[예시/homepage/학생 메모 예시]]',
+    '- [[예시/homepage/상담 기록 예시]]',
+    '- [[예시/homepage/수업 활동 기록 예시]]',
     '- [[00. 시작하기/homepage 주간 운영 예시]]',
     '',
     '## 5단계. Google Apps Script 예시',
@@ -1588,13 +1588,13 @@ function buildStarterKitEntries() {
     { path: '00. 시작하기/homepage 빠른 시작.md', content: buildStarterQuickStartNote() },
     { path: '00. 시작하기/homepage 주간 운영 예시.md', content: buildStarterWeeklyWorkflowNote() },
     { path: '00. 시작하기/homepage Google Apps Script 복붙 예시.md', content: buildStarterAppsScriptNote() },
-    { path: 'Templates/homepage/학생 메모 템플릿.md', content: buildStudentMemoTemplate() },
-    { path: 'Templates/homepage/상담 기록 템플릿.md', content: buildCounselingTemplate() },
-    { path: 'Templates/homepage/수업 준비 템플릿.md', content: buildLessonPrepTemplate() },
-    { path: 'Templates/homepage/과제 관리 템플릿.md', content: buildAssignmentTemplate() },
-    { path: 'Samples/homepage/학생 메모 예시.md', content: buildStudentMemoSample() },
-    { path: 'Samples/homepage/상담 기록 예시.md', content: buildCounselingSample() },
-    { path: 'Samples/homepage/수업 활동 기록 예시.md', content: buildActivitySample() },
+    { path: '템플릿/homepage/학생 메모 템플릿.md', content: buildStudentMemoTemplate() },
+    { path: '템플릿/homepage/상담 기록 템플릿.md', content: buildCounselingTemplate() },
+    { path: '템플릿/homepage/수업 준비 템플릿.md', content: buildLessonPrepTemplate() },
+    { path: '템플릿/homepage/과제 관리 템플릿.md', content: buildAssignmentTemplate() },
+    { path: '예시/homepage/학생 메모 예시.md', content: buildStudentMemoSample() },
+    { path: '예시/homepage/상담 기록 예시.md', content: buildCounselingSample() },
+    { path: '예시/homepage/수업 활동 기록 예시.md', content: buildActivitySample() },
   ];
 }
 
@@ -2235,8 +2235,9 @@ class ClassHomepageCore {
     const starterFolderCreated = await this.ensureStarterKitFolders();
     const entries = buildStarterKitEntries();
     const results = [];
+    const backupStamp = formatTimestamp(this.now());
     for (const entry of entries) {
-      results.push(await this.createOrUpdateNote(entry.path, entry.content, { overwrite: false, backup: false }));
+      results.push(await this.createOrUpdateNote(entry.path, entry.content, { overwrite: true, backup: true, backupStamp }));
     }
     const createdFiles = results.filter((item) => item.created).length;
     const openedPath = normalizeNotePath('00. 시작하기/homepage 빠른 시작');
